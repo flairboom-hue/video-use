@@ -19,6 +19,7 @@ Try video-use in [Browser Use Cloud](https://cloud.browser-use.com/v4?utm_campai
 - **Generates animation overlays** via [HyperFrames](https://github.com/heygen-com/hyperframes), [Remotion](https://www.remotion.dev/), [Manim](https://www.manim.community/), or PIL — spawned in parallel sub-agents, one per animation
 - **Self-evaluates the rendered output** at every cut boundary before showing you anything
 - **Persists session memory** in `project.md` so next week's session picks up where you left off
+- **Transcribes locally** with [WhisperX](https://github.com/m-bain/whisperX) if you'd rather not use an API key — same format, no upload, no per-minute cost
 - **Exports to an NLE** via [OpenTimelineIO](https://github.com/AcademySoftwareFoundation/OpenTimelineIO) when you'd rather finish the cut by hand in Premiere or Resolve
 
 For YouTube work specifically, `references/youtube-retention.md` covers hook structure, pattern-interrupt cadence, and the optional tools that plug into the pipeline (screen capture, Shorts repurposing, NLE handoff).

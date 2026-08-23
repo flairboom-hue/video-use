@@ -16,6 +16,7 @@ dependencies = [
 animations = ["manim"]
 autocut = ["auto-editor"]
 otio = ["OpenTimelineIO-Plugins"]
+whisperx = ["whisperx"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
