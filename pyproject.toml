@@ -5,11 +5,11 @@ description = "Conversation-driven video editor skill for Claude Code"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [
-    "requests",
-    "librosa",
-    "matplotlib",
-    "pillow",
-    "numpy",
+    "requests>=2.28",
+    "librosa>=0.10",
+    "matplotlib>=3.6",
+    "pillow>=9.0",
+    "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
@@ -17,6 +17,7 @@ animations = ["manim"]
 autocut = ["auto-editor"]
 otio = ["OpenTimelineIO-Plugins"]
 whisperx = ["whisperx"]
+dev = ["pytest>=7.0"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -24,3 +25,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The helpers are standalone scripts rather than an installed package;
+# conftest.py puts helpers/ on sys.path.
+addopts = "-q"

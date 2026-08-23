@@ -52,6 +52,19 @@ And in the session:
 
 It inventories the sources, proposes a strategy, waits for your OK, then produces `edit/final.mp4` next to your sources. All outputs live in `<videos_dir>/edit/` — the skill directory stays clean.
 
+## Tests
+
+```bash
+pip install -e '.[dev,otio]'
+pytest
+```
+
+61 tests over the pure logic — no ffmpeg, no models, no network, so the suite
+runs in well under a second. They pin the rules that fail *silently*: caption
+timeline offsets, cut-safety thresholds, the WhisperX/Scribe format contract,
+and overlay anchors surviving a re-cut. CI runs them on every push against
+Python 3.10 and 3.13.
+
 ## Manual install
 
 If you'd rather do it by hand:

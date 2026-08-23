@@ -191,11 +191,18 @@ def build_overlay_track(
                   f"previous one (ends {playhead:.2f}s) — not exported")
             continue
 
+        # An absent duration means "read it off the media"; an explicit 0 is a
+        # malformed overlay. `or` would conflate the two and probe for both.
+        declared = ov.get("duration")
+        if declared is not None:
+            duration = float(declared)
+        elif media.exists():
+            duration = probe_duration(media)
+        else:
+            duration = 0.0
+
         if not media.exists():
             print(f"  warning: overlay media missing, link will be broken: {media}")
-            duration = float(ov.get("duration", 0.0))
-        else:
-            duration = float(ov.get("duration") or probe_duration(media))
 
         if duration <= 0:
             print(f"  warning: overlay {media.name} has no duration — not exported")

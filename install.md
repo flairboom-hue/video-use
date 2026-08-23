@@ -161,5 +161,6 @@ Tell the user, in one short message:
 - `whisperx` is optional too (`pip install -e '.[whisperx]'`). It replaces the ElevenLabs key entirely for users who want local-only transcription. It pulls in torch, so don't install it during setup — wait until a session actually asks for it.
 - Node.js/npm are only needed for HyperFrames or Remotion slots. HyperFrames currently requires Node.js 22+.
 - HyperFrames, Remotion, and Manim are optional animation engines. Don't install or prefer one globally during setup; pick the engine per animation slot in `SKILL.md`. HyperFrames can run through `npx --yes hyperframes ...` in the slot directory. Remotion can be scaffolded with `npx create-video@latest` or installed inside the slot before rendering.
+- Run `pytest` after touching anything in `helpers/`. The suite needs only `pytest` (plus the `otio` extra for the export tests) and finishes in under a second — there is no excuse for skipping it.
 - Never run transcription as part of install verification unless the user explicitly asks — Scribe costs real money.
 - If the user is on Linux without a package manager Claude recognizes, print the manual `ffmpeg` install URL and wait rather than guessing.
