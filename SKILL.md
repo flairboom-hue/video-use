@@ -65,6 +65,7 @@ First-time install lives in `install.md` (clone, deps, ffmpeg, skill registratio
 - Node.js + npm available if the session needs HyperFrames or Remotion slots. HyperFrames currently requires Node.js 22+.
 - `yt-dlp`, HyperFrames, Remotion, Manim installed only on first use.
 - `auto-editor` on PATH only if the session uses `autocut.py` (`pip install auto-editor`). Optional — take selection works without it.
+- `OpenTimelineIO-Plugins` installed only if the session exports to an NLE via `otio_export.py`. Optional.
 - First-use animation setup happens inside the slot directory, never at the video-use repo root. HyperFrames can be invoked with `npx --yes hyperframes ...`; Remotion can be scaffolded with `npx create-video@latest` or installed as a project-local dependency before using its `remotion render` command.
 - This skill vendors `skills/manim-video/`. Read its SKILL.md when building a Manim slot.
 
@@ -79,6 +80,7 @@ Helpers (`helpers/transcribe.py`, `helpers/render.py`, etc.) live alongside this
 - **`timeline_view.py <video> <start> <end>`** — filmstrip + waveform PNG. On-demand visual drill-down. **Not a scan tool** — use it at decision points, not constantly.
 - **`render.py <edl.json> -o <out>`** — per-segment extract → concat → overlays (PTS-shifted) → subtitles LAST. `--preview` for 720p fast. `--build-subtitles` to generate master.srt inline.
 - **`grade.py <in> -o <out>`** — ffmpeg filter chain grade. Presets + `--filter '<raw>'` for custom.
+- **`otio_export.py <edl.json> -o <timeline>`** — EDL → OpenTimelineIO. `.otio` native, `.xml` (fcp_xml) for Premiere/Resolve, `.edl` (cmx_3600) universal. Hands the cut to an NLE instead of flattening it. Grade, fades and subtitles stay `render.py`'s job.
 
 For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a sub-agent via the `Agent` tool.
 
@@ -293,6 +295,8 @@ Match the source unless the user asked for something specific. Common targets: `
 ```
 
 `grade` is a preset name or raw ffmpeg filter. `overlays` are rendered animation clips. `subtitles` is optional and applied LAST.
+
+The same EDL has two exits: `render.py` bakes it into `final.mp4`, and `otio_export.py` writes it as an editable NLE timeline. When the user wants to finish by hand, export rather than re-cutting — the agent's decisions become their starting timeline.
 
 ## Memory — `project.md`
 

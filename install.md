@@ -157,6 +157,7 @@ Tell the user, in one short message:
 - `ffmpeg` from static builds works fine. Any modern (≥ 4.x) build is enough.
 - `yt-dlp` is optional. Don't block install on it; install lazily the first time a user asks to pull from a URL.
 - `auto-editor` is optional too (`pip install auto-editor`, or `pip install -e '.[autocut]'`). Only `helpers/autocut.py` needs it, and only when a session asks for silence detection.
+- `OpenTimelineIO-Plugins` is optional as well (`pip install -e '.[otio]'`). Only `helpers/otio_export.py` needs it, and only for an NLE handoff. Install the `-Plugins` package, not plain `opentimelineio` — the latter writes `.otio` but has no fcp_xml / cmx_3600 adapter.
 - Node.js/npm are only needed for HyperFrames or Remotion slots. HyperFrames currently requires Node.js 22+.
 - HyperFrames, Remotion, and Manim are optional animation engines. Don't install or prefer one globally during setup; pick the engine per animation slot in `SKILL.md`. HyperFrames can run through `npx --yes hyperframes ...` in the slot directory. Remotion can be scaffolded with `npx create-video@latest` or installed inside the slot before rendering.
 - Never run transcription as part of install verification unless the user explicitly asks — Scribe costs real money.

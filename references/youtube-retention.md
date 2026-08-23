@@ -50,7 +50,7 @@ change who clicks, not who stays.
 | Screen recording | — | OpenScreen |
 | Repurposing to Shorts | — | AI-Youtube-Shorts-Generator |
 | Manual fixes | — | LosslessCut |
-| Finishing in an NLE | — | OpenTimelineIO |
+| Finishing in an NLE | `otio_export.py` | OpenTimelineIO adapters |
 
 ## The tool stack
 
@@ -95,9 +95,11 @@ dependency of the core pipeline.
   quality.
 
 - **[OpenTimelineIO](https://github.com/AcademySoftwareFoundation/OpenTimelineIO)**
-  — converts an EDL into a timeline Premiere or DaVinci Resolve can open. The
-  escape hatch when the user wants to finish by hand; the agent's cut becomes
-  the starting timeline instead of being thrown away.
+  — wired in as `helpers/otio_export.py`. Converts an EDL into a timeline
+  Premiere or DaVinci Resolve can open (`--adapter fcp_xml`), or a universal
+  CMX EDL (`cmx_3600`). The escape hatch when the user wants to finish by hand;
+  the agent's cut becomes the starting timeline instead of being thrown away.
+  `pip install -e '.[otio]'`.
 
 - **[Waifu2x-Extension-GUI](https://github.com/AaronFeng753/Waifu2x-Extension-GUI)**
   — upscaling (Real-ESRGAN) and frame interpolation (RIFE). Only for genuinely
