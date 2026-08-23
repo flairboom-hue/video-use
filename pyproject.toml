@@ -14,6 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 animations = ["manim"]
+autocut = ["auto-editor"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
