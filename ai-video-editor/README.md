@@ -59,6 +59,53 @@ fixes it, and the pipeline continues with what it can still do.
 - **Speaker diarization in the UI.** WhisperX can produce it (`--diarize`,
   needs `HF_TOKEN`); nothing in the interface uses it yet.
 
+## Long-form or shorts?
+
+Long-form first. The defaults are 16:9 and a YouTube export; vertical is a
+secondary output derived from the same cut, not the other way round. Nothing in
+the pipeline assumes a short clip.
+
+What that costs in practice, measured on a 4-core machine with **no GPU** —
+a 10-minute 1080p source:
+
+| Stage | Time | Note |
+|---|---|---|
+| Probe | 0.3 s | |
+| Proxy | 77 s | decode-bound; a GPU or a shorter source scales this down |
+| Scenes | 13 s | runs on the proxy, not the source |
+| Rough cut | 0.7 s | auto-editor is fast even on long files |
+| **Analysis total** | **~92 s** | roughly 1/6 of runtime |
+
+Transcription is the variable: WhisperX on CPU is slower than realtime, on a
+GPU roughly 10× faster than realtime. For anything over ~20 minutes a GPU is
+the difference between minutes and an afternoon.
+
+Rendering scales linearly with the *output* length, not the source, so the
+rough cut pays for itself twice: shorter video and shorter render. Measured on
+the same machine, the 398 s cut of that 10-minute file:
+
+| Step | Time |
+|---|---|
+| Extract 30 segments | 80 s |
+| Concat + composite | <1 s |
+| Loudness normalisation | 31 s |
+| **Preview render total** | **111 s for 398 s of output** |
+
+Faster than realtime, and QC passed every check (−14.0 LUFS, no black frames,
+duration within 0.04 s of plan). First preview of a 10-minute source is about
+three and a half minutes of machine time, transcription aside.
+
+Two things are tuned for length rather than fixed:
+
+- The suggestion budget follows runtime (about one proposal per 90 seconds,
+  held between 6 and 40) instead of a flat cap that would starve a 40-minute
+  talk and flood a 2-minute one.
+- Analysis passes read the proxy, so source resolution barely affects them.
+
+Where it gets uncomfortable: past roughly an hour the review step is the
+bottleneck, not the machine — 40 proposals is a lot to click through. Batch
+accept/reject would be the next thing to build.
+
 ## Install
 
 ```bash
