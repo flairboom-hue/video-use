@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT))
 from engine import captions as cap                     # noqa: E402
 from engine import graphics as gfx                     # noqa: E402
 from engine import llm, pipeline, qc                   # noqa: E402
+from engine import suggestions as sug                  # noqa: E402
 from engine.capabilities import detect, quality_profile  # noqa: E402
 from engine.project import Project                     # noqa: E402
 from engine.render import ASPECTS                      # noqa: E402
@@ -211,6 +212,72 @@ def accept(pid: str, sid: str, body: dict | None = None) -> dict:
         return {"overlay": overlay.__dict__}
 
     return {"job": jobs.submit("graphic", work, pid).to_dict()}
+
+
+@app.post("/api/projects/{pid}/suggestions/bulk")
+def bulk_suggestions(pid: str, body: dict) -> dict:
+    """Accept, reject or defer many proposals in one call.
+
+    Reviewing forty proposals one click at a time is the actual bottleneck on a
+    long video, and it is a decision the user is qualified to make in bulk:
+    "graphics yes, B-roll no" is a normal editorial stance.
+
+    Selection is by explicit ids, or by filter (kind / graphic_kind / minimum
+    confidence). Bulk ACCEPT still renders each graphic, so it runs as one job
+    with per-item progress rather than a blocking request; a single failure is
+    recorded and the rest continue.
+    """
+    project = load_project(pid)
+    action = (body or {}).get("action", "")
+    if action not in {"accept", "reject", "defer"}:
+        raise HTTPException(400, "action must be accept, reject or defer")
+
+    ids = body.get("ids")
+    if ids is None:
+        ids = sug.select_pending(
+            project.data["suggestions"],
+            kind=body.get("kind"),
+            graphic_kind=body.get("graphic_kind"),
+            min_confidence=float(body.get("min_confidence", 0.0)))
+
+    known = {s["id"] for s in project.data["suggestions"]}
+    unknown = [i for i in ids if i not in known]
+    ids = [i for i in ids if i in known]
+    if not ids:
+        return {"applied": [], "failed": [], "unknown": unknown,
+                "message": "nothing matched the selection"}
+
+    if action in {"reject", "defer"}:
+        status = "rejected" if action == "reject" else "deferred"
+        for sid in ids:
+            if action == "reject":
+                project.remove_overlay(sid)
+            project.update_suggestion(sid, status=status)
+        project.snapshot(f"bulk {action} ({len(ids)})")
+        broadcast({"type": "project_updated", "project": project.summary()})
+        return {"applied": ids, "failed": [], "unknown": unknown,
+                "message": f"{len(ids)} proposal(s) {status}"}
+
+    def work(job):
+        applied, failed = [], []
+        for n, sid in enumerate(ids, start=1):
+            jobs.note(job, "graphic", "running", f"{n}/{len(ids)} · {sid}")
+            try:
+                pipeline.build_graphic(project, sid)
+                applied.append(sid)
+            except Exception as exc:
+                # One bad proposal must not abandon the other thirty-nine.
+                failed.append({"id": sid, "error": str(exc)[:200]})
+                project.update_suggestion(sid, status="pending")
+        project.snapshot(f"bulk accept ({len(applied)})")
+        broadcast({"type": "project_updated", "project": project.summary()})
+        if failed and not applied:
+            job.status = "failed"
+            job.error = f"all {len(failed)} graphic(s) failed"
+        return {"applied": applied, "failed": failed, "unknown": unknown}
+
+    return {"job": jobs.submit("graphic_bulk", work, pid).to_dict(),
+            "queued": len(ids), "unknown": unknown}
 
 
 @app.post("/api/projects/{pid}/suggestions/{sid}/reject")

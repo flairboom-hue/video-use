@@ -241,6 +241,24 @@ def detect(transcript: Transcript, min_confidence: float = 0.55,
     return unique[:max_suggestions]
 
 
+def select_pending(suggestions: list[dict], kind: str | None = None,
+                   graphic_kind: str | None = None,
+                   min_confidence: float = 0.0) -> list[str]:
+    """Ids of the pending proposals a bulk action should apply to.
+
+    Only `pending` ones: a bulk action must never silently re-apply something
+    the user already decided. An over-narrow filter returns an empty list —
+    never a fallback to "everything", which is the dangerous failure here.
+    """
+    return [
+        s["id"] for s in suggestions
+        if s.get("status") == "pending"
+        and (kind is None or s.get("kind") == kind)
+        and (graphic_kind is None or s.get("graphic_kind") == graphic_kind)
+        and float(s.get("confidence", 0) or 0) >= min_confidence
+    ]
+
+
 def match_broll(suggestion: Suggestion, library: Path) -> list[str]:
     """Find local B-roll whose filename matches the suggestion's query.
 

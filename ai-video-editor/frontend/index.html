@@ -145,7 +145,12 @@ select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);b
 
   <div id="chat">
     <div class="label" style="padding:12px 14px 0">Vorschläge <span id="qcount"></span></div>
-    <div id="sugg" style="max-height:44%;overflow-y:auto;padding:0 14px"></div>
+    <div id="bulk" style="padding:0 14px 8px;display:none;gap:6px;flex-wrap:wrap">
+      <button id="bAllGfx" title="Alle Grafik-Vorschläge übernehmen">Alle Grafiken ✓</button>
+      <button id="bHigh" title="Nur Vorschläge ab 75% Konfidenz">Sichere ✓</button>
+      <button class="ghost" id="bNone" title="Alle offenen ablehnen">Alle ✕</button>
+    </div>
+    <div id="sugg" style="max-height:40%;overflow-y:auto;padding:0 14px"></div>
     <div class="label" style="padding:4px 14px 0">Chat</div>
     <div id="log"></div>
     <div id="composer">
@@ -285,6 +290,7 @@ window.restore = async v => { await api(`/api/projects/${P.id}/restore/${v}`,{me
 function drawSuggestions(list) {
   const pending = list.filter(s=>s.status==="pending");
   $("#qcount").textContent = pending.length ? `· ${pending.length} offen` : "";
+  $("#bulk").style.display = pending.length > 2 ? "flex" : "none";
   $("#sugg").innerHTML = list.length ? list.map(s => `
     <div class="card ${s.status!=="pending"?"gone":""}">
       <div class="k">${s.kind==="broll"?"B-Roll":s.graphic_kind||"Grafik"} · ${Math.round(s.confidence*100)}%</div>
@@ -304,6 +310,17 @@ window.accept = async (id, kind="") => {
             {method:"POST", body:JSON.stringify({kind})});
 };
 window.rej = async id => { await api(`/api/projects/${P.id}/suggestions/${id}/reject`,{method:"POST"}); refresh(); };
+
+async function bulk(payload, label) {
+  const r = await api(`/api/projects/${P.id}/suggestions/bulk`,
+                      {method:"POST", body:JSON.stringify(payload)});
+  if (r.job) { toast(`${label}: ${r.queued} werden gerendert…`); log("sys", `${label}: ${r.queued} in Arbeit`); }
+  else { toast(r.message); log("sys", r.message); refresh(); }
+}
+$("#bAllGfx").onclick = () => bulk({action:"accept", kind:"graphic"}, "Alle Grafiken");
+$("#bHigh").onclick   = () => bulk({action:"accept", min_confidence:0.75}, "Sichere Vorschläge");
+$("#bNone").onclick   = () => { if (confirm("Alle offenen Vorschläge ablehnen?"))
+                                  bulk({action:"reject"}, "Alle abgelehnt"); };
 window.change = id => {
   const kinds = HEALTH.graphic_kinds;
   const k = prompt("Grafiktyp:\n" + kinds.join("\n"), kinds[0]);
