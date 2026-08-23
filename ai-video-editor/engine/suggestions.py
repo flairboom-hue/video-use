@@ -49,7 +49,7 @@ STOP_CAPS = {"Ich", "Wir", "Du", "Sie", "Er", "Es", "Das", "Der", "Die", "Ein",
 
 GRAPHIC_KINDS = [
     "number_animation", "bar_chart", "pie_chart", "comparison",
-    "timeline", "infographic", "icons", "text_animation", "map", "custom",
+    "timeline", "icon_row", "infographic", "text_animation", "map", "custom",
 ]
 
 
@@ -128,9 +128,18 @@ def _numbers(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion
                       if NUMBER.match(_norm(words[j].text).replace("%", ""))]
             has_pair = len(values) >= 2 and bool(context & COMPARISON)
 
+            # Percentages that add up to roughly a whole are shares of one
+            # thing, which is what a pie says and a bar chart does not.
+            numeric = [float(v.replace(",", ".")) for v in values
+                       if v.replace(",", ".").replace(".", "").isdigit()]
+            is_whole = (is_pct and len(numeric) >= 3
+                        and 92 <= sum(numeric) <= 108)
+
             # A "bar chart" of one bar communicates nothing — it is a number.
             # Bars only earn their place once there is something to compare to.
-            if has_pair:
+            if is_whole:
+                kind = "pie_chart"
+            elif has_pair:
                 kind = "comparison"
             elif len(values) >= 2:
                 kind = "bar_chart"
@@ -163,8 +172,11 @@ def _lists(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion]:
     if len(hits) < 2:      # one "erstens" is a figure of speech, not a list
         return []
     i, a, b = hits[0]
+    # Up to five points read better as labelled icons than as a text list;
+    # beyond that the row stops fitting and a plain infographic is honest.
+    graphic = "icon_row" if len(hits) <= 5 else "infographic"
     return [Suggestion(
-        id=f"g_list_{i}", kind="graphic", graphic_kind="infographic",
+        id=f"g_list_{i}", kind="graphic", graphic_kind=graphic,
         anchor_word=words[i].text, anchor_occurrence=_occurrence_index(words, i),
         start=words[i].start, end=words[hits[-1][2]].end, quote=_quote(words, a, b),
         reason=f"An enumerated list of {len(hits)} points — a build-on list keeps them straight",

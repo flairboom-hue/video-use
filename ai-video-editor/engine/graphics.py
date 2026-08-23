@@ -332,12 +332,263 @@ def text_animation(out: Path, text: str, style: Style | None = None,
     return _render(frame, dur, st, out)
 
 
+def pie_chart(out: Path, values: list[float], labels: list[str] | None = None,
+              style: Style | None = None, duration: float | None = None,
+              donut: bool = True, as_percent: bool = True) -> Path:
+    """Shares of a whole, swept in clockwise from twelve o'clock.
+
+    Drawn as a donut by default: the hole gives the eye a baseline to compare
+    arc lengths against, and leaves room for the total. A full pie is only
+    better when there are exactly two slices.
+
+    Segments sweep one after another rather than all at once — the same reason
+    the bars stagger. More than six slices stops being readable, so the tail is
+    collected into one "Sonstige" wedge instead of being drawn as slivers.
+    """
+    st = style or Style()
+    if not values:
+        raise GraphicsError("pie_chart needs at least one value")
+
+    labels = list(labels or [""] * len(values))
+    labels += [""] * (len(values) - len(labels))
+    values = [max(0.0, float(v)) for v in values]
+
+    MAX_SLICES = 6
+    if len(values) > MAX_SLICES:
+        head, tail = values[:MAX_SLICES - 1], values[MAX_SLICES - 1:]
+        labels = labels[:MAX_SLICES - 1] + ["Sonstige"]
+        values = head + [sum(tail)]
+
+    total = sum(values) or 1.0
+    dur = duration or (st.reveal + 0.2 * len(values) + st.hold)
+
+    # Palette: the accent leads, the rest step down in weight so the first
+    # slice reads as the point being made.
+    palette = [st.accent, st.accent_2, (110, 200, 150), (220, 180, 70),
+               (170, 130, 220), (130, 140, 150)]
+
+    size = min(st.content_height * 0.66, st.width * 0.34)
+    cx, cy = st.width * 0.36, st.content_center_y
+    box = [cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2]
+    hole = size * 0.56
+
+    label_font = st.font(int(st.height * 0.030))
+    value_font = st.font(int(st.height * 0.034))
+    total_font = st.font(int(st.height * 0.055))
+
+    # One continuous sweep across the whole ring rather than a stagger per
+    # slice. Staggering leaves wedges floating detached from each other
+    # mid-animation, which reads as a broken render instead of a build.
+    sweep_time = st.reveal + 0.2 * len(values)
+
+    def frame(draw, t, img):
+        elapsed = t * dur
+        swept = 360.0 * ease_out_cubic(max(0.0, min(1.0, elapsed / sweep_time)))
+        angle = -90.0
+        for i, v in enumerate(values):
+            share = 360.0 * (v / total)
+            visible = max(0.0, min(share, swept - (angle + 90.0)))
+            if visible <= 0:
+                break
+            draw.pieslice(box, angle, angle + visible,
+                          fill=(*palette[i % len(palette)], 255))
+            angle += share
+
+        if donut:
+            # Drawing with alpha 0 replaces the pixels rather than blending,
+            # which is what punches the hole.
+            draw.ellipse([cx - hole / 2, cy - hole / 2, cx + hole / 2, cy + hole / 2],
+                         fill=(0, 0, 0, 0))
+            shown = f"{total:,.0f}".replace(",", ".")
+            tw, th = _text_size(draw, shown, total_font)
+            draw.text((cx - tw / 2, cy - th / 2), shown, font=total_font,
+                      fill=(*st.text, 255))
+
+        # Legend, revealed in step with its slice.
+        lx = st.width * 0.60
+        row_h = st.height * 0.062
+        ly = cy - (len(values) - 1) * row_h / 2
+        chip = st.height * 0.022
+        reached = -90.0
+        for i, v in enumerate(values):
+            share = 360.0 * (v / total)
+            # Fade a legend row in as its own slice starts being drawn.
+            p = max(0.0, min(1.0, (swept - (reached + 90.0)) / max(1.0, share * 0.5)))
+            reached += share
+            if p <= 0:
+                break
+            alpha = int(255 * p)
+            y = ly + i * row_h
+            draw.rounded_rectangle([lx, y - chip / 2, lx + chip, y + chip / 2],
+                                   radius=int(chip * 0.28),
+                                   fill=(*palette[i % len(palette)], alpha))
+            text = labels[i] or f"Teil {i + 1}"
+            draw.text((lx + chip * 1.8, y - _text_size(draw, text, label_font)[1] / 2),
+                      text, font=label_font, fill=(*st.text, alpha))
+            share = f"{v / total * 100:.0f}%" if as_percent else f"{v:,.0f}".replace(",", ".")
+            sw, sh = _text_size(draw, share, value_font)
+            draw.text((st.width * 0.92 - sw, y - sh / 2), share, font=value_font,
+                      fill=(*st.muted, alpha))
+
+    return _render(frame, dur, st, out)
+
+
+# -- icons -------------------------------------------------------------------
+#
+# Drawn with primitives rather than pulled from an icon font. A font would mean
+# another asset to ship, another licence to check, and a missing-glyph failure
+# mode that renders as a blank box. These are deliberately few and plain.
+
+def _ico_check(d, x, y, r, c, w):
+    d.line([(x - r * .55, y), (x - r * .12, y + r * .45), (x + r * .6, y - r * .5)],
+           fill=c, width=w, joint="curve")
+
+
+def _ico_cross(d, x, y, r, c, w):
+    d.line([(x - r * .5, y - r * .5), (x + r * .5, y + r * .5)], fill=c, width=w)
+    d.line([(x + r * .5, y - r * .5), (x - r * .5, y + r * .5)], fill=c, width=w)
+
+
+def _ico_arrow_up(d, x, y, r, c, w):
+    d.line([(x, y + r * .6), (x, y - r * .6)], fill=c, width=w)
+    d.polygon([(x, y - r * .78), (x - r * .42, y - r * .28), (x + r * .42, y - r * .28)], fill=c)
+
+
+def _ico_arrow_down(d, x, y, r, c, w):
+    d.line([(x, y - r * .6), (x, y + r * .6)], fill=c, width=w)
+    d.polygon([(x, y + r * .78), (x - r * .42, y + r * .28), (x + r * .42, y + r * .28)], fill=c)
+
+
+def _ico_clock(d, x, y, r, c, w):
+    d.ellipse([x - r * .7, y - r * .7, x + r * .7, y + r * .7], outline=c, width=w)
+    d.line([(x, y), (x, y - r * .42)], fill=c, width=w)
+    d.line([(x, y), (x + r * .34, y + r * .16)], fill=c, width=w)
+
+
+def _ico_person(d, x, y, r, c, w):
+    d.ellipse([x - r * .27, y - r * .68, x + r * .27, y - r * .14], fill=c)
+    d.pieslice([x - r * .58, y - r * .1, x + r * .58, y + r * .95], 180, 360, fill=c)
+
+
+def _ico_star(d, x, y, r, c, w):
+    import math
+    pts = []
+    for i in range(10):
+        rad = r * (.78 if i % 2 == 0 else .34)
+        a = math.radians(-90 + i * 36)
+        pts.append((x + rad * math.cos(a), y + rad * math.sin(a)))
+    d.polygon(pts, fill=c)
+
+
+def _ico_bulb(d, x, y, r, c, w):
+    d.ellipse([x - r * .48, y - r * .72, x + r * .48, y + r * .24], outline=c, width=w)
+    d.line([(x - r * .22, y + r * .38), (x + r * .22, y + r * .38)], fill=c, width=w)
+    d.line([(x - r * .15, y + r * .62), (x + r * .15, y + r * .62)], fill=c, width=w)
+
+
+def _ico_shield(d, x, y, r, c, w):
+    d.polygon([(x, y - r * .75), (x + r * .58, y - r * .45), (x + r * .58, y + r * .15),
+               (x, y + r * .82), (x - r * .58, y + r * .15), (x - r * .58, y - r * .45)],
+              outline=c, width=w)
+
+
+def _ico_chart(d, x, y, r, c, w):
+    for i, h in enumerate((.3, .58, .86)):
+        bx = x - r * .55 + i * r * .55
+        d.rectangle([bx, y + r * .6 - r * h, bx + r * .3, y + r * .6], fill=c)
+
+
+def _ico_euro(d, x, y, r, c, w):
+    d.arc([x - r * .62, y - r * .68, x + r * .5, y + r * .68], 40, 320, fill=c, width=w)
+    d.line([(x - r * .72, y - r * .18), (x + r * .14, y - r * .18)], fill=c, width=w)
+    d.line([(x - r * .72, y + r * .16), (x + r * .14, y + r * .16)], fill=c, width=w)
+
+
+ICONS = {
+    "check": _ico_check, "cross": _ico_cross, "up": _ico_arrow_up,
+    "down": _ico_arrow_down, "clock": _ico_clock, "person": _ico_person,
+    "star": _ico_star, "bulb": _ico_bulb, "shield": _ico_shield,
+    "chart": _ico_chart, "euro": _ico_euro,
+}
+
+
+def available_icons() -> list[str]:
+    return sorted(ICONS)
+
+
+def icon_row(out: Path, items: list[tuple[str, str]] | list[str],
+             style: Style | None = None, duration: float | None = None,
+             circle: bool = True) -> Path:
+    """A row of labelled icons, revealed one at a time.
+
+    `items` is [(icon, label), ...] or plain labels, in which case every entry
+    gets a check. An unknown icon name raises rather than silently drawing a
+    blank — a missing glyph that renders as nothing is the failure mode this
+    hand-drawn set exists to avoid.
+    """
+    st = style or Style()
+    if not items:
+        raise GraphicsError("icon_row needs at least one item")
+
+    pairs: list[tuple[str, str]] = [
+        (i, "") if isinstance(i, str) else (i[0], i[1]) for i in items
+    ]
+    if all(isinstance(i, str) for i in items):
+        pairs = [("check", str(i)) for i in items]
+
+    unknown = [name for name, _ in pairs if name not in ICONS]
+    if unknown:
+        raise GraphicsError(
+            f"unknown icon(s): {unknown}. Available: {available_icons()}")
+
+    MAX_ITEMS = 5
+    if len(pairs) > MAX_ITEMS:
+        pairs = pairs[:MAX_ITEMS]
+
+    n = len(pairs)
+    dur = duration or (0.28 * n + st.hold)
+    step = st.width * 0.72 / n
+    left = st.width / 2 - step * (n - 1) / 2
+    cy = st.content_center_y
+    r = min(step * 0.30, st.height * 0.085)
+    ring = r * 1.55
+    weight = max(3, int(st.height * 0.007))
+    label_font = st.font(int(st.height * 0.032))
+    stagger = 0.22
+
+    def frame(draw, t, img):
+        elapsed = t * dur
+        for i, (name, label) in enumerate(pairs):
+            p = ease_out_cubic(max(0.0, min(1.0, (elapsed - i * stagger) / 0.42)))
+            if p <= 0:
+                break
+            alpha = int(255 * p)
+            x = left + i * step
+            # Rises slightly into place instead of appearing flat.
+            y = cy - (1 - p) * st.height * 0.02
+            colour = st.accent if i == n - 1 else st.accent_2
+
+            if circle:
+                draw.ellipse([x - ring, y - ring, x + ring, y + ring],
+                             outline=(*colour, alpha), width=weight)
+            ICONS[name](draw, x, y, r, (*colour, alpha), weight)
+
+            if label:
+                lw, _ = _text_size(draw, label, label_font)
+                draw.text((x - lw / 2, y + ring + st.height * 0.035), label,
+                          font=label_font, fill=(*st.text, alpha))
+
+    return _render(frame, dur, st, out)
+
+
 GENERATORS = {
     "number_animation": number_animation,
     "bar_chart": bar_chart,
     "comparison": comparison,
     "lower_third": lower_third,
     "text_animation": text_animation,
+    "pie_chart": pie_chart,
+    "icon_row": icon_row,
 }
 
 

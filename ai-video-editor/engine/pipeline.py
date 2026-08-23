@@ -213,6 +213,12 @@ def build_graphic(project: Project, suggestion_id: str, kind: str = "",
                         params.get("subtitle", ""), style)
     elif kind == "text_animation":
         gfx.text_animation(out, params.get("text", s.get("quote", ""))[:60], style)
+    elif kind == "pie_chart":
+        gfx.pie_chart(out, params.get("values", values or [1]),
+                      params.get("labels"), style)
+    elif kind == "icon_row":
+        gfx.icon_row(out, params.get("items") or
+                     [("check", w) for w in s.get("quote", "").split()[:4]], style)
 
     duration = media.probe(out).duration
     overlay = Overlay(file=str(out), duration=duration,

@@ -27,10 +27,25 @@ class TestDetection:
         assert s[0].graphic_kind == "comparison"
         assert s[0].payload["values"] == ["60", "100"]
 
+    def test_percentages_that_add_to_a_whole_become_a_pie(self, make_transcript):
+        # Shares of one thing, which is what a pie says and bars do not.
+        t = make_transcript([("45 Prozent organisch, 28 Prozent paid, "
+                              "17 Prozent referral, 10 Prozent direkt.", 0.0)])
+        assert detect(t)[0].graphic_kind == "pie_chart"
+
+    def test_percentages_that_do_not_add_up_are_not_a_pie(self, make_transcript):
+        t = make_transcript([("40 Prozent hier, 80 Prozent dort, 90 Prozent überall.", 0.0)])
+        assert detect(t)[0].graphic_kind != "pie_chart"
+
+    def test_a_short_list_becomes_an_icon_row(self, make_transcript):
+        t = make_transcript([("Erstens brauchen wir Zeit.", 0.0),
+                             ("Zweitens fehlt Personal.", 4.0)])
+        assert "icon_row" in kinds(detect(t))
+
     def test_ordinals_across_sentences_become_a_list(self, make_transcript):
         t = make_transcript([("Erstens brauchen wir Zeit.", 0.0),
                              ("Zweitens fehlt Personal.", 4.0)])
-        assert "infographic" in kinds(detect(t))
+        assert kinds(detect(t)) & {"icon_row", "infographic"}
 
     def test_a_single_ordinal_is_a_figure_of_speech(self, make_transcript):
         t = make_transcript([("Erstens brauchen wir Zeit.", 0.0)])
