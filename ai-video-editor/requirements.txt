@@ -1,0 +1,11 @@
+# Core — the app does not start without these.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9      # file uploads; FastAPI raises at import time without it
+pillow>=10.0                 # graphics rendering
+scenedetect[opencv]>=0.6     # scene detection
+
+# Optional, installed on demand. Each one degrades to a reported
+# "unavailable" stage rather than breaking the pipeline.
+#   pip install auto-editor          silence detection
+#   pip install whisperx             local transcription (large; pulls in torch)

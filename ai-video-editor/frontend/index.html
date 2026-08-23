@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Video Editor</title>
+<style>
+:root{
+  --bg:#0d1013; --panel:#141a1f; --panel-2:#1b2229; --line:#242e36;
+  --ink:#e6edf2; --muted:#8b9aa6; --accent:#ff7a1a; --accent-2:#4aa3ff;
+  --ok:#4ec98a; --warn:#e0a63c; --stop:#e0685f;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;height:100vh;overflow:hidden}
+button{font-family:inherit;font-size:13px;cursor:pointer;border-radius:5px;border:1px solid var(--line);
+  background:var(--panel-2);color:var(--ink);padding:7px 13px;transition:.12s}
+button:hover:not(:disabled){border-color:var(--accent);color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:#12181d;font-weight:600}
+button.primary:hover:not(:disabled){filter:brightness(1.1);color:#12181d}
+button.ghost{background:transparent}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{margin:0;font-weight:600}
+.mono{font-family:var(--mono)}
+
+/* ---------- drop screen ---------- */
+#drop{height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.dropbox{width:min(620px,100%);border:2px dashed var(--line);border-radius:12px;background:var(--panel);
+  padding:64px 40px;text-align:center;transition:.15s}
+.dropbox.hot{border-color:var(--accent);background:var(--panel-2)}
+.dropbox h1{font-size:26px;letter-spacing:-.02em;margin-bottom:10px}
+.dropbox p{color:var(--muted);margin:0 0 26px}
+#health{margin-top:22px;font-size:12px;color:var(--muted);font-family:var(--mono);line-height:1.7}
+.chip{display:inline-block;padding:1px 7px;border-radius:3px;font-size:11px;margin-right:5px}
+.chip.on{background:rgba(78,201,138,.15);color:var(--ok)}
+.chip.off{background:rgba(224,104,95,.15);color:var(--stop)}
+
+/* ---------- app shell ---------- */
+#app{display:none;height:100vh;grid-template-columns:250px 1fr 340px;grid-template-rows:46px 1fr 170px}
+#app.on{display:grid}
+header{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 16px;
+  border-bottom:1px solid var(--line);background:var(--panel)}
+header .name{font-weight:600}
+header .meta{color:var(--muted);font-size:12px;font-family:var(--mono)}
+header .sp{flex:1}
+aside{border-right:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:14px}
+main{display:flex;flex-direction:column;background:#07090b;min-width:0}
+#chat{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+footer{grid-column:1/-1;border-top:1px solid var(--line);background:var(--panel);overflow:auto;padding:10px 14px}
+
+.label{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;margin:16px 0 8px}
+.label:first-child{margin-top:0}
+
+/* stages */
+.stage{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--line);flex:none}
+.dot.done{background:var(--ok)} .dot.running{background:var(--accent);animation:pulse 1s infinite}
+.dot.failed{background:var(--stop)} .dot.unavailable{background:var(--warn)}
+.dot.waiting_for_user{background:var(--accent-2)}
+@keyframes pulse{50%{opacity:.3}}
+.stage .n{flex:1;text-transform:capitalize}
+.stage .d{color:var(--muted);font-size:11px;font-family:var(--mono);text-align:right;max-width:110px}
+
+/* preview */
+#player{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;min-height:0}
+video{max-width:100%;max-height:100%;background:#000;border-radius:6px}
+#bar{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);background:var(--panel)}
+select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:6px 9px;font-size:13px}
+
+/* suggestions */
+.card{border:1px solid var(--line);border-radius:7px;background:var(--panel-2);padding:11px;margin-bottom:9px}
+.card .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.card .q{margin:5px 0;font-size:13px;line-height:1.4}
+.card .r{color:var(--muted);font-size:11.5px;line-height:1.4;margin-bottom:9px}
+.card .btns{display:flex;gap:6px;flex-wrap:wrap}
+.card .btns button{padding:4px 9px;font-size:12px}
+.card.gone{opacity:.42}
+
+/* chat */
+#log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:9px}
+.msg{padding:8px 11px;border-radius:7px;font-size:13px;line-height:1.45;max-width:92%}
+.msg.me{background:var(--accent-2);color:#08121c;align-self:flex-end}
+.msg.ai{background:var(--panel-2);border:1px solid var(--line)}
+.msg.sys{background:transparent;color:var(--muted);font-size:11.5px;font-family:var(--mono);padding:2px 0}
+#composer{display:flex;gap:7px;padding:11px;border-top:1px solid var(--line)}
+#composer input{flex:1;background:var(--panel-2);border:1px solid var(--line);border-radius:5px;
+  padding:8px 11px;color:var(--ink);font-size:13px;font-family:inherit}
+
+/* timeline */
+.track{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.track .tn{width:74px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);flex:none}
+.lane{flex:1;height:22px;background:var(--panel-2);border-radius:3px;position:relative;overflow:hidden}
+.blk{position:absolute;top:0;bottom:0;border-radius:2px;font-size:10px;color:#0d1013;
+  display:flex;align-items:center;padding:0 5px;overflow:hidden;white-space:nowrap;font-weight:600}
+.blk.v{background:var(--accent-2)} .blk.g{background:var(--accent)} .blk.c{background:#6ac98a}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:6px;padding:9px 15px;font-size:13px;display:none;z-index:50}
+</style>
+</head>
+<body>
+
+<div id="drop">
+  <div class="dropbox" id="dropbox">
+    <h1>AI Video Editor</h1>
+    <p>Video hier hineinziehen</p>
+    <button class="primary" id="pick">VIDEO HINZUFÜGEN</button>
+    <input type="file" id="file" accept="video/*" hidden>
+    <p style="margin:16px 0 0;font-size:12px">oder eine Datei in <span class="mono">INPUT/</span> legen</p>
+    <div id="health">Prüfe System…</div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <span class="name" id="pname">—</span>
+    <span class="meta" id="pmeta"></span>
+    <span class="sp"></span>
+    <span class="meta" id="conn">●</span>
+    <button class="ghost" id="back">Projekte</button>
+  </header>
+
+  <aside>
+    <div class="label">Status</div>
+    <div id="stages"></div>
+    <div class="label">Rohschnitt</div>
+    <div id="cutstats" style="font-size:12px;color:var(--muted);line-height:1.6"></div>
+    <div class="label">Versionen</div>
+    <div id="versions" style="font-size:12px"></div>
+  </aside>
+
+  <main>
+    <div id="player"><video id="video" controls></video></div>
+    <div id="bar">
+      <select id="aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:5</option></select>
+      <select id="capstyle"></select>
+      <button id="prev">Vorschau rendern</button>
+      <button class="primary" id="exp">Exportieren</button>
+      <span class="sp" style="flex:1"></span>
+      <span class="meta mono" id="jobinfo" style="color:var(--muted);font-size:12px"></span>
+    </div>
+  </main>
+
+  <div id="chat">
+    <div class="label" style="padding:12px 14px 0">Vorschläge <span id="qcount"></span></div>
+    <div id="sugg" style="max-height:44%;overflow-y:auto;padding:0 14px"></div>
+    <div class="label" style="padding:4px 14px 0">Chat</div>
+    <div id="log"></div>
+    <div id="composer">
+      <input id="msg" placeholder="z.B. entferne die ersten 5 Sekunden" autocomplete="off">
+      <button id="send">↩</button>
+    </div>
+  </div>
+
+  <footer>
+    <div id="timeline"></div>
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let P = null, WS = null, HEALTH = null;
+
+const toast = (m, ms=3200) => { const t=$("#toast"); t.textContent=m; t.style.display="block";
+  clearTimeout(t._t); t._t=setTimeout(()=>t.style.display="none", ms); };
+
+async function api(path, opts={}) {
+  const r = await fetch(path, {headers:{"Content-Type":"application/json"}, ...opts});
+  if (!r.ok) { let d; try{ d=await r.json(); }catch{ d={detail:r.statusText}; }
+    throw new Error(d.detail || `HTTP ${r.status}`); }
+  return r.json();
+}
+
+/* ---------------- health ---------------- */
+async function health() {
+  HEALTH = await api("/api/health");
+  const t = HEALTH.capabilities.tools, hw = HEALTH.capabilities.hardware;
+  const chip = k => `<span class="chip ${t[k].available?'on':'off'}">${k}</span>`;
+  $("#health").innerHTML =
+    ["ffmpeg","auto-editor","scenedetect","whisperx","ollama"].map(chip).join("") +
+    `<br>${hw.cpu_count} CPU · ${hw.ram_gb} GB RAM · ${hw.gpu||"keine GPU"}` +
+    `<br>Whisper-Modell: ${HEALTH.profile.whisper_model} auf ${HEALTH.profile.device}` +
+    (HEALTH.missing_required.length
+      ? `<br><span style="color:var(--stop)">Fehlt: ${HEALTH.missing_required.join(", ")} — ${t[HEALTH.missing_required[0]].hint}</span>`
+      : "");
+  $("#capstyle").innerHTML = HEALTH.caption_styles
+    .map(s=>`<option value="${s.key}">${s.label}</option>`).join("");
+}
+
+/* ---------------- websocket ---------------- */
+function connect() {
+  WS = new WebSocket(`ws://${location.host}/ws`);
+  WS.onopen = () => { $("#conn").style.color = "var(--ok)"; };
+  WS.onclose = () => { $("#conn").style.color = "var(--stop)"; setTimeout(connect, 2000); };
+  WS.onmessage = e => {
+    const ev = JSON.parse(e.data);
+    if (ev.type === "stage" && P && ev.project_id === P.id) {
+      log("sys", `${ev.stage}: ${ev.status}${ev.detail?" — "+ev.detail:""}`);
+      refresh();
+    }
+    if (ev.type === "project_updated" && P && ev.project.id === P.id) render(ev.project);
+    if (ev.type === "preview_ready" && P && ev.project_id === P.id) {
+      $("#video").src = ev.url + "?t=" + Date.now();
+      toast("Vorschau bereit");
+    }
+    if (ev.type === "job") {
+      const j = ev.job;
+      $("#jobinfo").textContent = j.status === "processing" ? (j.detail||j.kind)
+        : j.status === "failed" ? `Fehler: ${j.error}` : "";
+      if (j.status === "failed") { log("ai", `${j.kind} fehlgeschlagen: ${j.error}${j.hint?"\n→ "+j.hint:""}`); toast("Job fehlgeschlagen"); }
+    }
+  };
+}
+
+/* ---------------- upload ---------------- */
+const box = $("#dropbox");
+["dragenter","dragover"].forEach(e=>box.addEventListener(e,ev=>{ev.preventDefault();box.classList.add("hot")}));
+["dragleave","drop"].forEach(e=>box.addEventListener(e,ev=>{ev.preventDefault();box.classList.remove("hot")}));
+box.addEventListener("drop", ev => { const f = ev.dataTransfer.files[0]; if (f) upload(f); });
+$("#pick").onclick = () => $("#file").click();
+$("#file").onchange = e => { if (e.target.files[0]) upload(e.target.files[0]); };
+
+async function upload(file) {
+  if (HEALTH && HEALTH.missing_required.length) {
+    return toast("Fehlende Voraussetzung: " + HEALTH.missing_required.join(", "));
+  }
+  toast(`Importiere ${file.name}…`);
+  const fd = new FormData(); fd.append("file", file);
+  const r = await fetch("/api/projects", {method:"POST", body:fd});
+  if (!r.ok) return toast("Import fehlgeschlagen");
+  open((await r.json()).project);
+}
+
+/* ---------------- project view ---------------- */
+function open(summary) {
+  $("#drop").style.display = "none";
+  $("#app").classList.add("on");
+  render(summary);
+  refresh();
+}
+$("#back").onclick = () => { $("#app").classList.remove("on"); $("#drop").style.display="flex"; P=null; };
+
+function render(s) {
+  P = s;
+  $("#pname").textContent = s.name;
+  const m = s.media || {};
+  $("#pmeta").textContent =
+    `${m.width||"?"}×${m.height||"?"} · ${s.duration}s Schnitt · ${s.clips} Clips · v${s.version}`;
+
+  const order = ["import","proxy","scenes","transcript","rough_cut","suggestions","render"];
+  $("#stages").innerHTML = order.map(k => {
+    const st = s.stages[k] || {status:"pending", detail:""};
+    const title = st.hint ? ` title="${st.hint.replace(/"/g,"&quot;")}"` : "";
+    return `<div class="stage"${title}><span class="dot ${st.status}"></span>
+      <span class="n">${k.replace("_"," ")}</span>
+      <span class="d">${st.status==="done"?"✓":st.status==="unavailable"?"n/a":st.detail||st.status}</span></div>`;
+  }).join("");
+
+  const rc = s.rough_cut || {};
+  $("#cutstats").innerHTML = rc.by_reason
+    ? Object.entries(rc.by_reason).map(([k,v])=>`${k}: <b>${v.count}</b> (${v.seconds}s)`).join("<br>")
+      + `<br><br>${rc.removed_pct}% entfernt`
+    : "—";
+}
+
+async function refresh() {
+  if (!P) return;
+  const d = await api(`/api/projects/${P.id}`);
+  render(d.project);
+  drawSuggestions(d.suggestions);
+  drawTimeline(d.timeline, d.project.duration);
+  $("#versions").innerHTML = (d.history||[]).slice(-6).reverse()
+    .map(h=>`<div style="padding:2px 0;color:var(--muted)">v${h.version} · ${h.label}
+      <button class="ghost" style="padding:1px 6px;font-size:11px" onclick="restore(${h.version})">↺</button></div>`).join("") || "—";
+  if (!$("#video").src) $("#video").src = `/api/projects/${P.id}/source`;
+}
+
+window.restore = async v => { await api(`/api/projects/${P.id}/restore/${v}`,{method:"POST"});
+  toast(`Version ${v} wiederhergestellt`); refresh(); };
+
+function drawSuggestions(list) {
+  const pending = list.filter(s=>s.status==="pending");
+  $("#qcount").textContent = pending.length ? `· ${pending.length} offen` : "";
+  $("#sugg").innerHTML = list.length ? list.map(s => `
+    <div class="card ${s.status!=="pending"?"gone":""}">
+      <div class="k">${s.kind==="broll"?"B-Roll":s.graphic_kind||"Grafik"} · ${Math.round(s.confidence*100)}%</div>
+      <div class="q">„${s.quote}"</div>
+      <div class="r">${s.reason}</div>
+      ${s.status==="pending" ? `<div class="btns">
+        <button class="primary" onclick="accept('${s.id}')">✓ Übernehmen</button>
+        <button onclick="change('${s.id}')">Ändern</button>
+        <button class="ghost" onclick="rej('${s.id}')">✕</button></div>`
+        : `<div class="r" style="margin:0">Status: ${s.status}</div>`}
+    </div>`).join("") : `<div style="color:var(--muted);font-size:12px">Keine Vorschläge.</div>`;
+}
+
+window.accept = async (id, kind="") => {
+  toast("Grafik wird gerendert…");
+  await api(`/api/projects/${P.id}/suggestions/${id}/accept`,
+            {method:"POST", body:JSON.stringify({kind})});
+};
+window.rej = async id => { await api(`/api/projects/${P.id}/suggestions/${id}/reject`,{method:"POST"}); refresh(); };
+window.change = id => {
+  const kinds = HEALTH.graphic_kinds;
+  const k = prompt("Grafiktyp:\n" + kinds.join("\n"), kinds[0]);
+  if (k && kinds.includes(k)) accept(id, k);
+  else if (k) toast(`"${k}" ist nicht implementiert`);
+};
+
+function drawTimeline(tl, dur) {
+  if (!dur) { $("#timeline").innerHTML = ""; return; }
+  const lane = (name, blocks, cls) => `
+    <div class="track"><div class="tn">${name}</div><div class="lane">
+      ${blocks.map(b=>`<div class="blk ${cls}" style="left:${b.a/dur*100}%;width:${Math.max(0.6,(b.b-b.a)/dur*100)}%">${b.t||""}</div>`).join("")}
+    </div></div>`;
+  let t = 0; const vids = (tl.clips||[]).map((c,i)=>{ const a=t; t+=c.end-c.start; return {a, b:t, t:`${i+1}`}; });
+  const ovs = (tl.overlays||[]).filter(o=>o.start_in_output!=null)
+    .map(o=>({a:o.start_in_output, b:o.start_in_output+o.duration, t:"GFX"}));
+  $("#timeline").innerHTML =
+    lane("Video", vids, "v") +
+    lane("Grafik", ovs, "g") +
+    lane("Captions", vids.length?[{a:0,b:dur,t:"CC"}]:[], "c");
+}
+
+/* ---------------- actions ---------------- */
+$("#prev").onclick = async () => {
+  toast("Vorschau wird gerendert…");
+  await api(`/api/projects/${P.id}/preview`, {method:"POST",
+    body:JSON.stringify({aspect:$("#aspect").value})});
+};
+$("#exp").onclick = async () => {
+  const map = {"16:9":["youtube"], "9:16":["shorts","reels","tiktok"], "1:1":["square"], "4:5":["square"]};
+  toast("Export läuft…");
+  const r = await api(`/api/projects/${P.id}/export`, {method:"POST",
+    body:JSON.stringify({targets: map[$("#aspect").value] || ["youtube"]})});
+  log("sys", "Export gestartet (Job " + r.job.id + ")");
+};
+$("#capstyle").onchange = async e => {
+  await api(`/api/projects/${P.id}/settings`, {method:"POST",
+    body:JSON.stringify({caption_style:e.target.value})});
+  toast("Caption-Stil: " + e.target.value);
+};
+$("#aspect").onchange = async e => {
+  await api(`/api/projects/${P.id}/settings`, {method:"POST",
+    body:JSON.stringify({aspect:e.target.value})});
+};
+
+/* ---------------- chat ---------------- */
+function log(who, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + who; d.textContent = text;
+  $("#log").appendChild(d); $("#log").scrollTop = 1e9;
+}
+async function send() {
+  const v = $("#msg").value.trim(); if (!v || !P) return;
+  $("#msg").value = ""; log("me", v);
+  try { const r = await api(`/api/projects/${P.id}/chat`, {method:"POST", body:JSON.stringify({message:v})});
+    log("ai", r.reply); if (r.applied) refresh();
+  } catch (e) { log("ai", "Fehler: " + e.message); }
+}
+$("#send").onclick = send;
+$("#msg").addEventListener("keydown", e => { if (e.key==="Enter") send(); });
+
+/* ---------------- boot ---------------- */
+(async () => {
+  await health(); connect();
+  const {projects} = await api("/api/projects");
+  if (projects.length) {
+    $("#health").innerHTML += `<br><br>${projects.length} Projekt(e): ` +
+      projects.slice(0,4).map(p=>`<a href="#" onclick="openProject('${p.id}');return false"
+        style="color:var(--accent-2)">${p.name}</a>`).join(" · ");
+  }
+})();
+window.openProject = async id => open((await api(`/api/projects/${id}`)).project);
+</script>
+</body>
+</html>

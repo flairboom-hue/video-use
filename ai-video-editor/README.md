@@ -1,0 +1,188 @@
+# AI Video Editor
+
+A local, privacy-first video editor with an AI assistant. Drop a video in, it
+does the mechanical editing, asks you only where a creative decision is needed,
+and exports for YouTube, Shorts, Reels and TikTok.
+
+Nothing is uploaded anywhere. Every stage runs on your machine.
+
+```
+INPUT/video.mp4
+   → analysis (probe · proxy · scenes · transcript)
+   → rough cut (silence · fillers · repetitions · false starts)
+   → creative suggestions  ──► you decide
+   → graphics · captions · loudness · reframe
+   → preview → quality control → OUTPUT/
+```
+
+## Status — read this first
+
+This is a working MVP, not a finished product. What is listed under
+**Implemented** genuinely works end to end; what is under **Not built yet** is
+absent rather than faked. There are no dead buttons and no stubbed stages: a
+stage whose dependency is missing reports `unavailable` with the command that
+fixes it, and the pipeline continues with what it can still do.
+
+### Implemented and verified
+
+| Area | What works |
+|---|---|
+| Import | Drag & drop, `INPUT/` folder watch, ffprobe analysis, HDR detection, proxy generation |
+| Rough cut | Silence (auto-editor), filler words, repeated takes, false starts — with cut-safety rules |
+| Scenes | PySceneDetect shot boundaries |
+| Transcript | WhisperX, word-level timestamps, SRT + VTT export |
+| Suggestions | Numbers, comparisons, lists, timelines, places → anchored proposals with a reason |
+| Graphics | 5 animated types, rendered with alpha, eased, caption-safe |
+| Captions | 4 styles incl. per-word karaoke highlighting, correct output-timeline offsets |
+| Render | Segment extract → lossless concat → overlays (PTS-shifted) → captions last → −14 LUFS |
+| Aspects | 16:9, 9:16, 1:1, 4:5 — video cropped to fill, overlays fitted so they stay intact |
+| Chat | Deterministic command parser; optional Ollama for anything beyond it |
+| Versioning | Copy-on-write snapshots, restore any version |
+| Quality control | Black frames, loudness, resolution, duration drift, caption sync, missing assets |
+| Export | Per-platform folders, QC gate, sidecar SRT + project JSON |
+
+### Not built yet
+
+- **Face-tracked reframing.** The crop is centred. `engine/render.py` accepts a
+  tracking curve and compiles it into the crop expression, but nothing produces
+  that curve yet — MediaPipe would be the next step. A centred crop is fine for
+  a single talking head and wrong for a two-shot.
+- **Semantic B-roll matching.** Suggestions match B-roll by filename only. A
+  real embedding index over `ASSETS/broll/` is the obvious upgrade; pretending
+  keyword matching is semantic search would be the kind of fake capability this
+  project avoids.
+- **Timeline editing by drag.** The timeline renders the real state but is
+  read-only. Edits go through the chat or the suggestion cards.
+- **Music ducking and EQ.** Loudness normalisation is implemented; sidechain
+  ducking is not.
+- **Smart zoom / punch-in.** Not implemented.
+- **Speaker diarization in the UI.** WhisperX can produce it (`--diarize`,
+  needs `HF_TOKEN`); nothing in the interface uses it yet.
+
+## Install
+
+```bash
+./install.sh          # macOS / Linux
+.\install.ps1         # Windows
+```
+
+The installer checks Python ≥ 3.10 and ffmpeg, creates a virtualenv, installs
+the Python packages, and stops with the exact install command if ffmpeg is
+missing. It is idempotent — anything already present is detected and skipped.
+
+Then:
+
+```bash
+./start.sh            # → http://127.0.0.1:8000
+.\start.ps1
+```
+
+### Optional components
+
+Both degrade gracefully. The app runs without them and says so in the UI.
+
+```bash
+pip install whisperx          # transcript → captions, filler removal, suggestions
+                              # large download; a CUDA GPU makes it ~10× faster
+```
+
+Ollama for open-ended chat: <https://ollama.com>, then `ollama pull llama3.1`.
+Without it the chat still handles the common commands through a deterministic
+parser — the model only widens what can be phrased.
+
+## Which open-source projects this uses, and why
+
+| Project | Licence | Why this one |
+|---|---|---|
+| [FFmpeg](https://github.com/FFmpeg/FFmpeg) | LGPL/GPL | The only realistic foundation. Every filter used here — grade, tonemap, loudnorm, subtitles, overlay — is native, so there is no second rendering engine to keep in sync. |
+| [auto-editor](https://github.com/WyattBlue/auto-editor) | Unlicense | The largest mechanical win on unrehearsed footage: 20–40 % of runtime removed. Its `v1` export is the most stable of its formats, which is what this integrates against. |
+| [WhisperX](https://github.com/m-bain/whisperX) | BSD-2 | Word-level timestamps plus diarization. Phrase-level ASR would break the rough cut, the caption animation and the overlay anchoring at once. |
+| [PySceneDetect](https://github.com/Breakthrough/PySceneDetect) | BSD-3 | Gepflegt since 2014, does one thing reliably. Used for shot boundaries and B-roll indexing. |
+| [Pillow](https://github.com/python-pillow/Pillow) | MIT-CMU | Chosen over Remotion for the graphics. Remotion needs Node plus a per-project `npm install` and renders in a headless browser — the most fragile step in a local install. Pillow is already a dependency and renders deterministically. The trade-off is a smaller shape vocabulary, which is the right trade for something that has to run on the user's machine. |
+| [FastAPI](https://github.com/fastapi/fastapi) | MIT | REST + WebSocket in one process, no broker. |
+| [Ollama](https://github.com/ollama/ollama) | MIT | Local LLM behind a swappable interface. Optional by design. |
+
+**Deliberately not used:** Remotion (source-available, not OSI — free for
+individuals and teams up to three, paid above that; and the Node dependency),
+OpenMontage (AGPL-3.0 and only months old), Celery/Redis (a broker to install
+for a single-user local app).
+
+## Project structure
+
+```
+ai-video-editor/
+├── engine/                 pure logic, no web framework
+│   ├── capabilities.py     what this machine can do, probed honestly
+│   ├── media.py            ffprobe facts, proxy, thumbnails
+│   ├── scenes.py           PySceneDetect
+│   ├── transcribe.py       WhisperX → the shared transcript format
+│   ├── rough_cut.py        the four removal passes + safety rules
+│   ├── suggestions.py      where visual support would help
+│   ├── graphics.py         animated overlays (PIL → ffmpeg)
+│   ├── captions.py         styled ASS, karaoke timing
+│   ├── render.py           the compositor
+│   ├── qc.py               pre-export checks
+│   ├── project.py          non-destructive project file + versions
+│   ├── pipeline.py         stage orchestration
+│   └── llm.py              swappable LLM + deterministic command parser
+├── backend/
+│   ├── main.py             FastAPI: REST, WebSocket, static
+│   ├── jobs.py             one worker, explicit status machine
+│   └── watcher.py          INPUT/ folder watch
+├── frontend/index.html     single file, no build step
+├── tests/                  59 tests, pure logic, < 1s
+├── INPUT/  OUTPUT/  ASSETS/  projects/  config/
+├── install.sh / install.ps1
+└── start.sh / start.ps1
+```
+
+`projects/<id>/project.json` is the single source of truth. The source video is
+opened read-only and never rewritten; rendering produces a new file. Undo is a
+file copy, not an inverse-operation replay.
+
+## Troubleshooting
+
+**"ffmpeg — required" and the app will not start.**
+`brew install ffmpeg` / `sudo apt-get install ffmpeg` / `winget install Gyan.FFmpeg`.
+On Windows open a new terminal afterwards so PATH is picked up.
+
+**Transcript stage says `unavailable`.**
+WhisperX is not installed. `pip install whisperx`. Everything else still runs;
+you lose captions, filler removal and creative suggestions.
+
+**WhisperX fails with a CUDA error.**
+Set `device=cpu`. The app already falls back to CPU automatically when no GPU
+is detected; this only bites when a GPU exists but the CUDA runtime is broken.
+
+**Transcription is very slow.**
+No GPU. `engine/capabilities.py` drops to a smaller Whisper model on modest
+machines; force it further with a smaller model if needed.
+
+**Export is blocked by quality control.**
+Read the finding — it names the problem and the remedy. Re-run with
+`{"force": true}` to override deliberately. A file that fails QC is deleted
+rather than shipped.
+
+**A graphic lands on the wrong sentence.**
+It should not: overlays are anchored to a spoken word, not a timestamp, and
+re-resolved on every render. If the anchored word was cut out, the overlay is
+dropped rather than misplaced.
+
+**The chat does not understand me.**
+Without Ollama it recognises a fixed set of commands (trim, caption size and
+style, remove overlays, aspect, grade, make short). Install Ollama for the rest.
+
+**A file in `INPUT/` was not picked up.**
+The watcher waits until the file size stops changing, so a large copy is not
+imported half-written. Give it a few seconds.
+
+## Tests
+
+```bash
+pytest
+```
+
+59 tests over the pure logic — no ffmpeg, no models, no network, under a
+second. They target the rules that fail *silently*: caption timeline offsets,
+cut-safety thresholds, suggestion restraint, non-destructive versioning.
+Verified against deliberate mutations rather than assumed to work.

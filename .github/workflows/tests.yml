@@ -31,8 +31,14 @@ jobs:
           pip install pytest
           pip install "OpenTimelineIO-Plugins" || echo "OTIO unavailable; those tests will skip"
 
-      - name: Run tests
+      - name: Run tests (video-use helpers)
         run: pytest -q
+
+      - name: Run tests (ai-video-editor)
+        working-directory: ai-video-editor
+        run: |
+          pip install pillow
+          pytest -q
 
   lint:
     runs-on: ubuntu-latest
@@ -45,5 +51,5 @@ jobs:
         run: pip install ruff
       - name: Check the helpers compile and are import-clean
         run: |
-          ruff check helpers/ tests/ --select E9,F63,F7,F82
-          python -m compileall -q helpers/ tests/
+          ruff check helpers/ tests/ ai-video-editor/ --select E9,F63,F7,F82
+          python -m compileall -q helpers/ tests/ ai-video-editor/engine ai-video-editor/backend
