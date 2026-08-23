@@ -32,7 +32,7 @@ fixes it, and the pipeline continues with what it can still do.
 | Scenes | PySceneDetect shot boundaries |
 | Transcript | WhisperX, word-level timestamps, SRT + VTT export |
 | Suggestions | Numbers, comparisons, lists, timelines, places → anchored proposals with a reason |
-| Graphics | 7 animated types (number, bar, pie/donut, comparison, icon row, lower third, kinetic type), rendered with alpha, eased, caption-safe |
+| Graphics | 7 animated types (number, bar, pie/donut, comparison, icon row, lower third, kinetic type) in 4 themes, rendered with alpha, eased, caption-safe |
 | Captions | 4 styles incl. per-word karaoke highlighting, correct output-timeline offsets |
 | Render | Segment extract → lossless concat → overlays (PTS-shifted) → captions last → −14 LUFS |
 | Aspects | 16:9, 9:16, 1:1, 4:5 — video cropped to fill, overlays fitted so they stay intact |
@@ -60,6 +60,24 @@ fixes it, and the pipeline continues with what it can still do.
 - **Smart zoom / punch-in.** Not implemented.
 - **Speaker diarization in the UI.** WhisperX can produce it (`--diarize`,
   needs `HF_TOKEN`); nothing in the interface uses it yet.
+
+## Graphic themes
+
+A graphic composites onto whatever the camera shot, so its own palette is only
+half the problem: white type on a bright kitchen wall is invisible however good
+the colours are. Two mechanisms solve that, and each theme picks one.
+
+| Theme | Mechanism | Use when |
+|---|---|---|
+| `light_card` *(default)* | Bright card behind the content, dark type | The common explainer look. Readable over anything. |
+| `soft_light` | Pale card, muted blues, thinner type | Corporate or calm register |
+| `bold_outline` | No card, heavy contour on type **and** shapes | Short-form; survives on any footage |
+| `dark_minimal` | Neither — assumes dark or busy footage | Cinematic pieces shot dark |
+
+`dark_minimal` is the one to avoid on bright material: it is the only theme
+without a plate or a contour, and it washes out on a light wall.
+
+Set it per project in the toolbar, or in the chat: *"nimm bold_outline"*.
 
 ## Long-form or shorts?
 

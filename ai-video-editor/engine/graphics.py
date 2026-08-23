@@ -56,6 +56,15 @@ class Style:
     hold: float = 1.0          # freeze the landing frame before the cut
     reveal: float = 0.9        # how long the movement itself takes
 
+    # Legibility over unknown footage. A graphic composites onto whatever the
+    # camera shot, so its own colours are only half the problem: white text on
+    # a bright kitchen wall is invisible no matter how good the palette is.
+    outline: tuple[int, int, int, int] | None = None   # per-glyph contour
+    outline_width: int = 0
+    panel: tuple[int, int, int, int] | None = None     # backing card behind it
+    panel_radius: float = 0.02      # fraction of frame height
+    panel_inset: float = 0.06       # fraction of frame width
+
     reserve_caption_band: bool = True
 
     @property
@@ -100,6 +109,56 @@ def _text_size(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
     return box[2] - box[0], box[3] - box[1]
 
 
+def _write(draw: ImageDraw.ImageDraw, xy, text: str, font, fill, st: "Style") -> None:
+    """Draw text, with the style's contour if it has one.
+
+    Pillow's stroke_width does this natively and correctly handles the glyph
+    outline rather than the four-offset trick, which breaks on thin strokes.
+    """
+    if st.outline and st.outline_width > 0:
+        alpha = fill[3] if len(fill) > 3 else 255
+        edge = (*st.outline[:3], min(alpha, st.outline[3] if len(st.outline) > 3 else 255))
+        # Scale the contour to the glyph. A fixed stroke that reads as a crisp
+        # edge on a headline closes up small labels into black blobs, because
+        # the stroke grows inward as well as outward.
+        size = getattr(font, "size", st.height * 0.05) or st.height * 0.05
+        width = max(1, round(st.outline_width * size / (st.height * 0.09)))
+        draw.text(xy, text, font=font, fill=fill,
+                  stroke_width=width, stroke_fill=edge)
+    else:
+        draw.text(xy, text, font=font, fill=fill)
+
+
+def _shape_edge(st: "Style", alpha: int = 255) -> tuple:
+    """Contour colour and width for filled shapes, or (None, 0).
+
+    A theme that outlines its text must outline its shapes too: in
+    bold_outline the non-accent bars are white, and white on a bright wall is
+    the exact failure the contour exists to prevent.
+    """
+    if not st.outline or st.outline_width <= 0:
+        return None, 0
+    edge = (*st.outline[:3], min(alpha, st.outline[3] if len(st.outline) > 3 else 255))
+    return edge, max(2, round(st.outline_width * 0.7))
+
+
+def _panel(draw: ImageDraw.ImageDraw, st: "Style", progress: float = 1.0) -> None:
+    """The backing card, if the theme has one.
+
+    This is what actually makes a light design usable over dark footage and a
+    dark one usable over bright footage — the plate, not the palette.
+    """
+    if not st.panel or progress <= 0:
+        return
+    inset_x = st.width * st.panel_inset
+    inset_y = st.height * st.panel_inset * 0.72
+    alpha = int(st.panel[3] * min(1.0, progress)) if len(st.panel) > 3 else 255
+    draw.rounded_rectangle(
+        [inset_x, inset_y, st.width - inset_x, st.content_height - inset_y * 0.4],
+        radius=int(st.height * st.panel_radius),
+        fill=(*st.panel[:3], alpha))
+
+
 def _encode(frames_dir: Path, out: Path, fps: int) -> Path:
     """PNG sequence -> QuickTime Animation with alpha (composites cleanly)."""
     if not shutil.which("ffmpeg"):
@@ -141,16 +200,16 @@ def number_animation(out: Path, value: float, label: str = "", suffix: str = "",
     decimals = 0 if float(value).is_integer() else 1
 
     def frame(draw, t, img):
+        _panel(draw, st)
         p = ease_out_cubic(min(1.0, t / move)) if move > 0 else 1.0
         current = value * p
         text = f"{current:,.{decimals}f}".replace(",", ".") + suffix
         w, h = _text_size(draw, text, big)
         x, y = (st.width - w) / 2, st.content_center_y - h / 2
-        draw.text((x, y), text, font=big, fill=(*st.accent, 255))
+        _write(draw, (x, y), text, font=big, fill=(*st.accent, 255), st=st)
         if label:
             lw, _ = _text_size(draw, label.upper(), small)
-            draw.text(((st.width - lw) / 2, y + h + st.height * 0.05),
-                      label.upper(), font=small, fill=(*st.muted, 255))
+            _write(draw, ((st.width - lw) / 2, y + h + st.height * 0.05), label.upper(), font=small, fill=(*st.muted, 255), st=st)
     return _render(frame, dur, st, out)
 
 
@@ -181,6 +240,7 @@ def bar_chart(out: Path, values: list[float], labels: list[str] | None = None,
     stagger = 0.18
 
     def frame(draw, t, img):
+        _panel(draw, st)
         elapsed = t * dur
         for i, v in enumerate(values):
             local = (elapsed - i * stagger) / st.reveal
@@ -190,16 +250,16 @@ def bar_chart(out: Path, values: list[float], labels: list[str] | None = None,
             h = max_h * (v / peak) * p
             x0 = left + i * (bar_w + gap)
             colour = st.accent if i == n - 1 else st.accent_2
+            edge, ew = _shape_edge(st)
             draw.rounded_rectangle([x0, base_y - h, x0 + bar_w, base_y],
-                                   radius=int(bar_w * 0.08), fill=(*colour, 255))
+                                   radius=int(bar_w * 0.08), fill=(*colour, 255),
+                                   outline=edge, width=ew)
             shown = f"{v * p:,.0f}".replace(",", ".") + suffix
             tw, th = _text_size(draw, shown, value_font)
-            draw.text((x0 + (bar_w - tw) / 2, base_y - h - th - st.height * 0.025),
-                      shown, font=value_font, fill=(*st.text, 255))
+            _write(draw, (x0 + (bar_w - tw) / 2, base_y - h - th - st.height * 0.025), shown, font=value_font, fill=(*st.text, 255), st=st)
             if labels[i]:
                 lw, _ = _text_size(draw, labels[i].upper(), label_font)
-                draw.text((x0 + (bar_w - lw) / 2, base_y + st.height * 0.022),
-                          labels[i].upper(), font=label_font, fill=(*st.muted, 255))
+                _write(draw, (x0 + (bar_w - lw) / 2, base_y + st.height * 0.022), labels[i].upper(), font=label_font, fill=(*st.muted, 255), st=st)
     return _render(frame, dur, st, out)
 
 
@@ -218,6 +278,7 @@ def comparison(out: Path, before: float, after: float, label_before: str = "VORH
     final_right = f"{after:,.0f}".replace(",", ".") + suffix
 
     def frame(draw, t, img):
+        _panel(draw, st)
         elapsed = t * dur
         p1 = ease_out_cubic(max(0.0, min(1.0, elapsed / st.reveal)))
         p2 = ease_out_cubic(max(0.0, min(1.0, (elapsed - 0.35) / st.reveal)))
@@ -232,11 +293,9 @@ def comparison(out: Path, before: float, after: float, label_before: str = "VORH
                 continue
             text = f"{value * prog:,.0f}".replace(",", ".") + suffix
             w, h = _text_size(draw, text, big)
-            draw.text((cx - w / 2, cy - h / 2), text, font=big,
-                      fill=(*colour, int(255 * prog)))
+            _write(draw, (cx - w / 2, cy - h / 2), text, font=big, fill=(*colour, int(255 * prog)), st=st)
             lw, _ = _text_size(draw, label.upper(), small)
-            draw.text((cx - lw / 2, cy + h * 0.75), label.upper(), font=small,
-                      fill=(*st.muted, int(255 * prog)))
+            _write(draw, (cx - lw / 2, cy + h * 0.75), label.upper(), font=small, fill=(*st.muted, int(255 * prog)), st=st)
 
         if p2 > 0:
             # Measure the finished labels so the gap does not move as they count up.
@@ -270,6 +329,7 @@ def lower_third(out: Path, title: str, subtitle: str = "",
     bar_h = st.height * 0.11
 
     def frame(draw, t, img):
+        _panel(draw, st)
         elapsed = t * dur
         p = ease_out_cubic(max(0.0, min(1.0, elapsed / st.reveal)))
         out_p = ease_in_out_cubic(max(0.0, min(1.0, (elapsed - (dur - 0.4)) / 0.4)))
@@ -294,11 +354,9 @@ def lower_third(out: Path, title: str, subtitle: str = "",
         if width >= needed:
             alpha = int(255 * min(1.0, (width - needed) / max(1.0, full_w * 0.08)))
             tx = bar_x + pad
-            draw.text((tx, bar_y + bar_h * 0.14), title, font=title_font,
-                      fill=(*st.text, alpha))
+            _write(draw, (tx, bar_y + bar_h * 0.14), title, font=title_font, fill=(*st.text, alpha), st=st)
             if subtitle:
-                draw.text((tx, bar_y + bar_h * 0.58), subtitle.upper(), font=sub_font,
-                          fill=(*st.muted, alpha))
+                _write(draw, (tx, bar_y + bar_h * 0.58), subtitle.upper(), font=sub_font, fill=(*st.muted, alpha), st=st)
     return _render(frame, dur, st, out)
 
 
@@ -316,6 +374,7 @@ def text_animation(out: Path, text: str, style: Style | None = None,
     per = (dur - st.hold) / max(1, len(words))
 
     def frame(draw, t, img):
+        _panel(draw, st)
         elapsed = t * dur
         shown = max(1, min(len(words), int(elapsed / per) + 1)) if per > 0 else len(words)
         full_w, h = _text_size(draw, text, font)
@@ -325,9 +384,8 @@ def text_animation(out: Path, text: str, style: Style | None = None,
         for i, w in enumerate(words[:shown]):
             local = ease_out_cubic(max(0.0, min(1.0, (elapsed - i * per) / 0.25)))
             ww, _ = _text_size(draw, w + " ", font)
-            draw.text((cursor, y + (1 - local) * st.height * 0.02), w, font=font,
-                      fill=(*(st.accent if i == len(words) - 1 else st.text),
-                            int(255 * local)))
+            _write(draw, (cursor, y + (1 - local) * st.height * 0.02), w, font,
+                   (*(st.accent if i == len(words) - 1 else st.text), int(255 * local)), st)
             cursor += ww
     return _render(frame, dur, st, out)
 
@@ -382,6 +440,7 @@ def pie_chart(out: Path, values: list[float], labels: list[str] | None = None,
     sweep_time = st.reveal + 0.2 * len(values)
 
     def frame(draw, t, img):
+        _panel(draw, st)
         elapsed = t * dur
         swept = 360.0 * ease_out_cubic(max(0.0, min(1.0, elapsed / sweep_time)))
         angle = -90.0
@@ -390,19 +449,24 @@ def pie_chart(out: Path, values: list[float], labels: list[str] | None = None,
             visible = max(0.0, min(share, swept - (angle + 90.0)))
             if visible <= 0:
                 break
+            edge, ew = _shape_edge(st)
             draw.pieslice(box, angle, angle + visible,
-                          fill=(*palette[i % len(palette)], 255))
+                          fill=(*palette[i % len(palette)], 255),
+                          outline=edge, width=ew)
             angle += share
 
         if donut:
             # Drawing with alpha 0 replaces the pixels rather than blending,
-            # which is what punches the hole.
+            # which is what punches the hole. On a themed card the hole must
+            # show the card, not the footage behind it — punching through the
+            # panel makes the ring look like it is floating in a cut-out.
+            hole_fill = (*st.panel[:3], st.panel[3] if len(st.panel) > 3 else 255) \
+                if st.panel else (0, 0, 0, 0)
             draw.ellipse([cx - hole / 2, cy - hole / 2, cx + hole / 2, cy + hole / 2],
-                         fill=(0, 0, 0, 0))
+                         fill=hole_fill)
             shown = f"{total:,.0f}".replace(",", ".")
             tw, th = _text_size(draw, shown, total_font)
-            draw.text((cx - tw / 2, cy - th / 2), shown, font=total_font,
-                      fill=(*st.text, 255))
+            _write(draw, (cx - tw / 2, cy - th / 2), shown, font=total_font, fill=(*st.text, 255), st=st)
 
         # Legend, revealed in step with its slice.
         lx = st.width * 0.60
@@ -419,16 +483,16 @@ def pie_chart(out: Path, values: list[float], labels: list[str] | None = None,
                 break
             alpha = int(255 * p)
             y = ly + i * row_h
+            c_edge, c_ew = _shape_edge(st, alpha)
             draw.rounded_rectangle([lx, y - chip / 2, lx + chip, y + chip / 2],
                                    radius=int(chip * 0.28),
-                                   fill=(*palette[i % len(palette)], alpha))
+                                   fill=(*palette[i % len(palette)], alpha),
+                                   outline=c_edge, width=c_ew)
             text = labels[i] or f"Teil {i + 1}"
-            draw.text((lx + chip * 1.8, y - _text_size(draw, text, label_font)[1] / 2),
-                      text, font=label_font, fill=(*st.text, alpha))
+            _write(draw, (lx + chip * 1.8, y - _text_size(draw, text, label_font)[1] / 2), text, font=label_font, fill=(*st.text, alpha), st=st)
             share = f"{v / total * 100:.0f}%" if as_percent else f"{v:,.0f}".replace(",", ".")
             sw, sh = _text_size(draw, share, value_font)
-            draw.text((st.width * 0.92 - sw, y - sh / 2), share, font=value_font,
-                      fill=(*st.muted, alpha))
+            _write(draw, (st.width * 0.92 - sw, y - sh / 2), share, font=value_font, fill=(*st.muted, alpha), st=st)
 
     return _render(frame, dur, st, out)
 
@@ -557,6 +621,7 @@ def icon_row(out: Path, items: list[tuple[str, str]] | list[str],
     stagger = 0.22
 
     def frame(draw, t, img):
+        _panel(draw, st)
         elapsed = t * dur
         for i, (name, label) in enumerate(pairs):
             p = ease_out_cubic(max(0.0, min(1.0, (elapsed - i * stagger) / 0.42)))
@@ -575,10 +640,57 @@ def icon_row(out: Path, items: list[tuple[str, str]] | list[str],
 
             if label:
                 lw, _ = _text_size(draw, label, label_font)
-                draw.text((x - lw / 2, y + ring + st.height * 0.035), label,
-                          font=label_font, fill=(*st.text, alpha))
+                _write(draw, (x - lw / 2, y + ring + st.height * 0.035), label, font=label_font, fill=(*st.text, alpha), st=st)
 
     return _render(frame, dur, st, out)
+
+
+THEMES: dict[str, dict] = {
+    # The original: assumes dark or busy footage, no plate.
+    "dark_minimal": {
+        "accent": (255, 90, 0), "accent_2": (90, 170, 255),
+        "text": (255, 255, 255), "muted": (150, 150, 150),
+        "outline": None, "outline_width": 0, "panel": None,
+    },
+    # The common YouTube look: a bright card with dark type. Readable over any
+    # footage because the card, not the palette, does the work.
+    "light_card": {
+        "accent": (232, 93, 4), "accent_2": (0, 119, 182),
+        "text": (24, 28, 33), "muted": (108, 117, 125),
+        "outline": None, "outline_width": 0,
+        "panel": (250, 249, 246, 242), "panel_radius": 0.024, "panel_inset": 0.07,
+    },
+    # No plate, heavy contour. Survives on anything and reads as the
+    # high-contrast style short-form has settled on.
+    "bold_outline": {
+        "accent": (255, 214, 0), "accent_2": (34, 87, 214),
+        "text": (255, 255, 255), "muted": (240, 240, 240),
+        "outline": (12, 12, 12, 255), "outline_width": 6, "panel": None,
+    },
+    # Softer corporate register: pale card, muted blues, thin type.
+    "soft_light": {
+        "accent": (13, 110, 168), "accent_2": (108, 168, 204),
+        "text": (33, 41, 49), "muted": (124, 137, 148),
+        "outline": None, "outline_width": 0,
+        "panel": (255, 255, 255, 226), "panel_radius": 0.03, "panel_inset": 0.08,
+    },
+}
+
+
+def available_themes() -> list[str]:
+    return sorted(THEMES)
+
+
+def make_style(theme: str = "dark_minimal", **overrides) -> Style:
+    """Build a Style from a named theme.
+
+    An unknown name raises rather than silently falling back: a graphic
+    rendered in the wrong theme is worse than a render that stops and says so.
+    """
+    if theme not in THEMES:
+        raise GraphicsError(
+            f"unknown theme '{theme}'. Available: {available_themes()}")
+    return Style(**{**THEMES[theme], **overrides})
 
 
 GENERATORS = {

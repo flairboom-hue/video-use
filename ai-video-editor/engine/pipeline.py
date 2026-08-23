@@ -187,10 +187,13 @@ def build_graphic(project: Project, suggestion_id: str, kind: str = "",
     # graphic may use the whole frame.
     source_stem = Path(project.data["source"]).stem
     has_captions = (project.root / "transcripts" / f"{source_stem}.json").exists()
-    style = gfx.Style(width=int(info.get("width") or 1920),
-                      height=int(info.get("height") or 1080),
-                      fps=int(round(float(info.get("fps") or 30))),
-                      reserve_caption_band=has_captions)
+    theme = project.data["settings"].get("graphic_theme", "light_card")
+    style = gfx.make_style(
+        theme,
+        width=int(info.get("width") or 1920),
+        height=int(info.get("height") or 1080),
+        fps=int(round(float(info.get("fps") or 30))),
+        reserve_caption_band=has_captions)
 
     out = project.root / "graphics" / f"{suggestion_id}_{kind}.mov"
     values = [float(v.replace(",", ".")) for v in s.get("payload", {}).get("values", [])

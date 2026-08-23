@@ -136,6 +136,7 @@ select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);b
     <div id="bar">
       <select id="aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:5</option></select>
       <select id="capstyle"></select>
+      <select id="theme" title="Grafik-Design"></select>
       <button id="prev">Vorschau rendern</button>
       <button class="primary" id="exp">Exportieren</button>
       <span class="sp" style="flex:1"></span>
@@ -194,6 +195,10 @@ async function health() {
       : "");
   $("#capstyle").innerHTML = HEALTH.caption_styles
     .map(s=>`<option value="${s.key}">${s.label}</option>`).join("");
+  const themeLabels = {light_card:"Helle Karte", dark_minimal:"Dunkel minimal",
+                       bold_outline:"Kontrast / Shorts", soft_light:"Soft hell"};
+  $("#theme").innerHTML = (HEALTH.graphic_themes||[])
+    .map(t=>`<option value="${t}">${themeLabels[t]||t}</option>`).join("");
 }
 
 /* ---------------- websocket ---------------- */
@@ -360,6 +365,12 @@ $("#capstyle").onchange = async e => {
   await api(`/api/projects/${P.id}/settings`, {method:"POST",
     body:JSON.stringify({caption_style:e.target.value})});
   toast("Caption-Stil: " + e.target.value);
+};
+$("#theme").onchange = async e => {
+  await api(`/api/projects/${P.id}/settings`, {method:"POST",
+    body:JSON.stringify({graphic_theme:e.target.value})});
+  toast("Design: " + e.target.options[e.target.selectedIndex].text
+        + " — angenommene Grafiken neu rendern");
 };
 $("#aspect").onchange = async e => {
   await api(`/api/projects/${P.id}/settings`, {method:"POST",

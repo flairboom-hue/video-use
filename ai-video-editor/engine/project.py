@@ -94,6 +94,7 @@ class Project:
             "settings": {
                 "language": "de",
                 "caption_style": "bold_center",
+                "graphic_theme": "light_card",
                 "aspect": "16:9",
                 "remove_fillers": True,
                 "remove_repetitions": True,

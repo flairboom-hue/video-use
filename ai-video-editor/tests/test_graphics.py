@@ -10,8 +10,9 @@ from __future__ import annotations
 import pytest
 
 from engine.graphics import (CAPTION_SAFE_BOTTOM, GENERATORS, ICONS, Style,
-                             available_icons, available_kinds, ease_in_out_cubic,
-                             ease_out_cubic, icon_row, pie_chart)
+                             available_icons, available_kinds, available_themes,
+                             ease_in_out_cubic, ease_out_cubic, icon_row,
+                             make_style, pie_chart)
 
 
 class TestRegistry:
@@ -25,6 +26,49 @@ class TestRegistry:
     def test_every_named_icon_is_drawable(self):
         assert set(available_icons()) == set(ICONS)
         assert all(callable(fn) for fn in ICONS.values())
+
+
+class TestThemes:
+    def test_every_theme_builds_a_usable_style(self):
+        for name in available_themes():
+            st = make_style(name, width=1280, height=720)
+            assert st.width == 1280 and st.text and st.accent
+
+    def test_an_unknown_theme_raises_rather_than_falling_back(self):
+        # A graphic rendered in the wrong theme is worse than one that stops.
+        with pytest.raises(Exception) as exc:
+            make_style("neon_wedding")
+        assert "unknown theme" in str(exc.value)
+
+    def test_overrides_win_over_the_preset(self):
+        assert make_style("light_card", width=999).width == 999
+
+    def test_light_themes_carry_a_panel_and_dark_type(self):
+        # The plate, not the palette, is what makes a light design work over
+        # dark footage.
+        for name in ("light_card", "soft_light"):
+            st = make_style(name)
+            assert st.panel is not None
+            assert sum(st.text) < 300, "light theme needs dark type"
+
+    def test_the_contour_theme_has_no_panel_and_a_real_stroke(self):
+        st = make_style("bold_outline")
+        assert st.panel is None
+        assert st.outline is not None and st.outline_width >= 4
+
+    def test_panel_less_themes_use_no_near_white_fill(self):
+        # bold_outline once used white for the secondary fill, which vanished
+        # on bright footage — the exact failure the contour exists to prevent.
+        # Near-white is min(channel) high; a saturated colour always has one
+        # low channel, which is what keeps it separable on a bright ground.
+        for name in available_themes():
+            st = make_style(name)
+            if st.panel is not None:
+                continue                     # a plate provides the contrast
+            for role, colour in (("accent", st.accent), ("accent_2", st.accent_2)):
+                assert min(colour) < 200, (
+                    f"{name}.{role} {colour} is near-white and needs a panel "
+                    "or a darker partner to survive bright footage")
 
 
 class TestEasing:

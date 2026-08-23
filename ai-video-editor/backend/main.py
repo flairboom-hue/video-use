@@ -141,6 +141,8 @@ def health() -> dict:
         "llm": {"provider": llm.configured().name, "available": llm.available()},
         "caption_styles": cap.available_styles(),
         "graphic_kinds": gfx.available_kinds(),
+        "graphic_themes": gfx.available_themes(),
+        "icons": gfx.available_icons(),
         "aspects": list(ASPECTS),
     }
 
@@ -499,6 +501,12 @@ def _apply_command(project: Project, cmd: dict) -> dict:
         project.data["settings"]["aspect"] = arg
         project.save()
         return {"message": f"Target aspect is now {arg}. Render a preview to see it."}
+
+    if name == "theme":
+        project.data["settings"]["graphic_theme"] = arg
+        project.save()
+        return {"message": f"Graphic theme set to {arg}. Re-render accepted "
+                           "graphics to apply it."}
 
     if name == "grade":
         project.data["settings"]["grade"] = arg

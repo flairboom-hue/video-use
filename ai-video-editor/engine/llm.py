@@ -103,6 +103,7 @@ COMMANDS = [
     ("aspect",       r"\b(9:16|16:9|1:1|4:5)\b"),
     ("make_short",   r"(\d+)\s*[-\s]?(?:sekunden|second)s?\s*(?:short|clip|reel)"),
     ("grade",        r"\b(warm_cinematic|neutral|punch|flat)\b"),
+    ("theme",        r"\b(light_card|dark_minimal|bold_outline|soft_light)\b"),
 ]
 
 
