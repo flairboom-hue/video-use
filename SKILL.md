@@ -232,7 +232,7 @@ None is mandatory. Invent hybrids if useful (e.g., PIL background with a HyperFr
 - **Over voiceover:** total duration ≥ `narration_length + 1s` (universal).
 - **Never parallel-reveal independent elements** — the eye can't track two new things at once. One thing, pause, next thing.
 
-**Animation payoff timing (rule for sync-to-narration):** get the payoff word's timestamp. Start the overlay `reveal_duration` seconds earlier so the landing frame coincides with the spoken payoff word. Without this sync the animation feels disconnected.
+**Animation payoff timing (rule for sync-to-narration):** the landing frame must coincide with the spoken payoff word — without that sync the animation feels disconnected. Express this in the EDL as `anchor_word` + `reveal_duration` rather than computing a `start_in_output` by hand: `render.py` resolves the word against the current cut, so the sync holds through every re-cut instead of drifting the first time a range above it changes.
 
 **Easing** (universal — never `linear`, it looks robotic):
 
@@ -290,7 +290,9 @@ Match the source unless the user asked for something specific. Common targets: `
   ],
   "grade": "warm_cinematic",
   "overlays": [
-    {"file": "edit/animations/slot_1/render.mp4", "start_in_output": 0.0, "duration": 5.0}
+    {"file": "edit/animations/slot_1/render.mp4", "start_in_output": 0.0, "duration": 5.0},
+    {"file": "edit/animations/slot_2/render.mp4", "anchor_word": "ninety percent",
+     "anchor_source": "C0103", "reveal_duration": 0.8, "duration": 5.0}
   ],
   "subtitles": "edit/master.srt",
   "total_duration_s": 87.4
@@ -298,6 +300,8 @@ Match the source unless the user asked for something specific. Common targets: `
 ```
 
 `grade` is a preset name or raw ffmpeg filter. `overlays` are rendered animation clips. `subtitles` is optional and applied LAST.
+
+**Overlay placement — prefer an anchor over a timestamp.** `start_in_output` is an absolute position and silently drifts the moment the cut changes: every range before it shifts, and the animation lands on the wrong sentence. `anchor_word` instead names a spoken word or phrase, and `render.py` recomputes the position from the current EDL on every render, so the sync survives a re-cut. Optional companions: `anchor_source` (restrict to one take), `anchor_occurrence` (1-based, default 1), `reveal_duration` (start this many seconds early so the landing frame hits the word), `anchor_offset` (extra nudge). Matching ignores case and punctuation. A word that was cut out is a hard error, not a silent fallback.
 
 The same EDL has two exits: `render.py` bakes it into `final.mp4`, and `otio_export.py` writes it as an editable NLE timeline. When the user wants to finish by hand, export rather than re-cutting — the agent's decisions become their starting timeline.
 

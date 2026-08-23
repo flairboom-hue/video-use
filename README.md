@@ -17,6 +17,7 @@ Try video-use in [Browser Use Cloud](https://cloud.browser-use.com/v4?utm_campai
 - **30ms audio fades** at every cut so you never hear a pop
 - **Burns subtitles** in your style — 2-word UPPERCASE chunks by default, fully customizable
 - **Generates animation overlays** via [HyperFrames](https://github.com/heygen-com/hyperframes), [Remotion](https://www.remotion.dev/), [Manim](https://www.manim.community/), or PIL — spawned in parallel sub-agents, one per animation
+- **Anchors animations to spoken words**, not timestamps — re-cut the video and the overlays follow the dialogue instead of drifting
 - **Self-evaluates the rendered output** at every cut boundary before showing you anything
 - **Persists session memory** in `project.md` so next week's session picks up where you left off
 - **Transcribes locally** with [WhisperX](https://github.com/m-bain/whisperX) if you'd rather not use an API key — same format, no upload, no per-minute cost

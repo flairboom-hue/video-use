@@ -384,6 +384,161 @@ def build_master_srt(edl: dict, edit_dir: Path, out_path: Path) -> None:
     print(f"master SRT → {out_path.name} ({len(entries)} cues)")
 
 
+# -------- Overlay anchoring (content-bound placement) -----------------------
+#
+# An overlay pinned to an absolute `start_in_output` silently drifts the moment
+# the cut changes: every range before it shifts, and the animation that landed
+# on "ninety percent" now lands on the next sentence. Nothing recomputes it,
+# and with several overlays the drift is easy to miss until final review.
+#
+# Anchoring to a spoken word instead means the position is derived from the
+# CURRENT EDL on every render, so the sync survives a re-cut. The math is the
+# same one build_master_srt uses, and for the same reason:
+#
+#     output_time = word.start - segment_start + segment_offset
+
+
+def _normalize_token(text: str) -> str:
+    """Fold a transcript token to its bare word for matching.
+
+    Anchors are written by a human ("neunzig"), transcripts carry punctuation
+    and case ("Neunzig,"). Matching the raw strings would fail on exactly the
+    words most worth anchoring to — the ones that end a phrase.
+    """
+    return re.sub(r"[^\w]", "", text, flags=re.UNICODE).lower()
+
+
+def build_spoken_index(edl: dict, edit_dir: Path) -> list[dict]:
+    """Flatten every word that survives into the cut, with its output time.
+
+    Only words inside an EDL range are indexed — anchoring to a word that was
+    cut out is a mistake worth reporting, not silently resolving to the place
+    where the word used to be.
+    """
+    transcripts_dir = edit_dir / "transcripts"
+    index: list[dict] = []
+    seg_offset = 0.0
+
+    for r in edl["ranges"]:
+        src_name = r["source"]
+        seg_start = float(r["start"])
+        seg_end = float(r["end"])
+
+        tr_path = transcripts_dir / f"{src_name}.json"
+        if tr_path.exists():
+            transcript = json.loads(tr_path.read_text())
+            for w in _words_in_range(transcript, seg_start, seg_end):
+                raw = (w.get("text") or "").strip()
+                token = _normalize_token(raw)
+                if not token:
+                    continue
+                local_start = max(seg_start, float(w["start"]))
+                index.append({
+                    "token": token,
+                    "text": raw,
+                    "source": src_name,
+                    "output_time": local_start - seg_start + seg_offset,
+                })
+
+        seg_offset += seg_end - seg_start
+
+    return index
+
+
+def find_occurrences(index: list[dict], phrase: str, source: str | None) -> list[dict]:
+    """Every match of `phrase` in cut order, each returned as its first word.
+
+    Multi-word anchors match consecutive tokens, which is what makes anchoring
+    to a distinctive phrase possible when a single word repeats all over the
+    take.
+    """
+    needles = [_normalize_token(t) for t in phrase.split()]
+    needles = [n for n in needles if n]
+    if not needles:
+        return []
+
+    hits: list[dict] = []
+    for i in range(len(index) - len(needles) + 1):
+        window = index[i:i + len(needles)]
+        if source and window[0]["source"] != source:
+            continue
+        if [w["token"] for w in window] == needles:
+            hits.append(window[0])
+    return hits
+
+
+def resolve_overlay_anchors(edl: dict, edit_dir: Path) -> list[dict]:
+    """Turn `anchor_word` overlays into concrete `start_in_output` values.
+
+    Overlays that already carry `start_in_output` and no anchor pass through
+    untouched, so EDLs written before anchoring keep working.
+
+    A failed anchor is fatal rather than a warning: a misplaced overlay is the
+    exact class of silent failure the Hard Rules exist to prevent, and it is
+    cheap to fix once the render says which word it could not find.
+    """
+    overlays = edl.get("overlays") or []
+
+    # Validate before the early return below, so a malformed overlay is caught
+    # even in an EDL that uses no anchors at all — otherwise it surfaces as a
+    # bare KeyError deep inside the ffmpeg filter graph.
+    for i, ov in enumerate(overlays):
+        if not ov.get("anchor_word") and "start_in_output" not in ov:
+            sys.exit(
+                f"overlay {i} has neither 'start_in_output' nor 'anchor_word': {ov.get('file')}"
+            )
+
+    if not any(ov.get("anchor_word") for ov in overlays):
+        return overlays
+
+    index = build_spoken_index(edl, edit_dir)
+    if not index:
+        sys.exit(
+            "overlay anchoring needs transcripts, but no words were found in "
+            f"{edit_dir / 'transcripts'} for any EDL range."
+        )
+
+    resolved: list[dict] = []
+    for i, ov in enumerate(overlays):
+        phrase = ov.get("anchor_word")
+        if not phrase:
+            resolved.append(ov)
+            continue
+
+        occurrence = int(ov.get("anchor_occurrence", 1))
+        hits = find_occurrences(index, phrase, ov.get("anchor_source"))
+        hit = hits[occurrence - 1] if 1 <= occurrence <= len(hits) else None
+        if hit is None:
+            scope = f" in source '{ov['anchor_source']}'" if ov.get("anchor_source") else ""
+            total = len(hits)
+            sys.exit(
+                f"overlay {i} ({ov.get('file')}): could not anchor to \"{phrase}\"{scope}"
+                f" at occurrence {occurrence} — found {total} occurrence(s) in the current cut.\n"
+                "The word may have been cut out, or spelled differently in the transcript."
+            )
+
+        reveal = float(ov.get("reveal_duration", 0.0))
+        offset = float(ov.get("anchor_offset", 0.0))
+        start = hit["output_time"] - reveal + offset
+
+        if start < 0:
+            print(
+                f"  warning: overlay {i} anchored to \"{phrase}\" starts before the video "
+                f"({start:.2f}s); clamping to 0. Shorten reveal_duration to keep the sync."
+            )
+            start = 0.0
+
+        placed = dict(ov)
+        placed["start_in_output"] = round(start, 3)
+        resolved.append(placed)
+        print(
+            f"  anchored overlay {i} → \"{hit['text']}\" at {hit['output_time']:.2f}s "
+            f"(overlay starts {start:.2f}s)"
+        )
+
+    return resolved
+
+
 # -------- Loudness normalization (social-ready audio) -----------------------
 
 
@@ -639,7 +794,7 @@ def main() -> None:
                 subs_path = None
 
     # 4. Composite (overlays + subtitles LAST) → intermediate (pre-loudnorm) path
-    overlays = edl.get("overlays") or []
+    overlays = resolve_overlay_anchors(edl, edit_dir)
     if args.no_loudnorm:
         # Composite directly to final output
         build_final_composite(base_path, overlays, subs_path, out_path, edit_dir)
