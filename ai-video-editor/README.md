@@ -36,6 +36,7 @@ fixes it, and the pipeline continues with what it can still do.
 | Captions | 4 styles incl. per-word karaoke highlighting, correct output-timeline offsets |
 | Render | Segment extract → lossless concat → overlays (PTS-shifted) → captions last → −14 LUFS |
 | Aspects | 16:9, 9:16, 1:1, 4:5 — video cropped to fill, overlays fitted so they stay intact |
+| Review | Per-proposal accept / change / reject, plus bulk actions by kind or confidence |
 | Chat | Deterministic command parser; optional Ollama for anything beyond it |
 | Versioning | Copy-on-write snapshots, restore any version |
 | Quality control | Black frames, loudness, resolution, duration drift, caption sync, missing assets |
@@ -52,7 +53,8 @@ fixes it, and the pipeline continues with what it can still do.
   keyword matching is semantic search would be the kind of fake capability this
   project avoids.
 - **Timeline editing by drag.** The timeline renders the real state but is
-  read-only. Edits go through the chat or the suggestion cards.
+  read-only. Edits go through the chat, the suggestion cards or the bulk
+  actions.
 - **Music ducking and EQ.** Loudness normalisation is implemented; sidechain
   ducking is not.
 - **Smart zoom / punch-in.** Not implemented.
@@ -84,16 +86,23 @@ Rendering scales linearly with the *output* length, not the source, so the
 rough cut pays for itself twice: shorter video and shorter render. Measured on
 the same machine, the 398 s cut of that 10-minute file:
 
-| Step | Time |
-|---|---|
-| Extract 30 segments | 80 s |
-| Concat + composite | <1 s |
-| Loudness normalisation | 31 s |
-| **Preview render total** | **111 s for 398 s of output** |
+| Step | Preview (960×540) | Final (1920×1080, CRF 20) |
+|---|---|---|
+| Extract 30 segments | 80 s | 193 s |
+| Concat + composite | <1 s | 1 s |
+| Loudness normalisation | 31 s | 33 s |
+| **Total** | **111 s** | **227 s** |
+| vs. realtime | 0.28× | 0.57× |
 
-Faster than realtime, and QC passed every check (−14.0 LUFS, no black frames,
-duration within 0.04 s of plan). First preview of a 10-minute source is about
-three and a half minutes of machine time, transcription aside.
+Both finish faster than the video plays, and QC passed every check on both
+(−14.0 LUFS, no black frames, duration within 0.04 s of plan, correct
+resolution). First preview of a 10-minute source is about three and a half
+minutes of machine time; the final 1080p master another four. Transcription is
+extra and is the one stage that wants a GPU.
+
+Practically: a 10-minute video is a coffee break, a 40-minute one is more like
+half an hour of machine time on a laptop with no GPU — unattended, since the
+review step sits in the middle and waits for you anyway.
 
 Two things are tuned for length rather than fixed:
 
@@ -102,9 +111,10 @@ Two things are tuned for length rather than fixed:
   talk and flood a 2-minute one.
 - Analysis passes read the proxy, so source resolution barely affects them.
 
-Where it gets uncomfortable: past roughly an hour the review step is the
-bottleneck, not the machine — 40 proposals is a lot to click through. Batch
-accept/reject would be the next thing to build.
+Past roughly forty minutes of source the review step becomes the bottleneck
+rather than the machine, which is what the bulk actions above the suggestion
+list are for: accept all graphics, accept everything above 75 % confidence, or
+reject the lot — each one a single undoable version.
 
 ## Install
 
