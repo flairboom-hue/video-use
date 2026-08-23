@@ -56,9 +56,18 @@ class Style:
     hold: float = 1.0          # freeze the landing frame before the cut
     reveal: float = 0.9        # how long the movement itself takes
 
+    reserve_caption_band: bool = True
+
     @property
     def content_height(self) -> float:
-        """Vertical space a graphic may use before the caption band starts."""
+        """Vertical space a graphic may use before the caption band starts.
+
+        Reserved only when captions are actually burned in. Holding the band
+        back on a video without captions just pushes every graphic into the
+        top two thirds and leaves the frame looking unbalanced.
+        """
+        if not self.reserve_caption_band:
+            return float(self.height)
         return self.height * (1 - CAPTION_SAFE_BOTTOM)
 
     @property
@@ -267,13 +276,24 @@ def lower_third(out: Path, title: str, subtitle: str = "",
         reveal = p * (1 - out_p)
         if reveal <= 0:
             return
-        width = st.width * 0.42 * reveal
+        # The plate is sized to its content, not to a fixed fraction: a long
+        # name would otherwise overflow a 42%-wide box.
+        pad = st.height * 0.03
+        tw, _ = _text_size(draw, title, title_font)
+        sw, _ = _text_size(draw, subtitle.upper(), sub_font) if subtitle else (0, 0)
+        full_w = max(tw, sw) + pad * 2 + st.height * 0.008
+
+        width = full_w * reveal
         draw.rectangle([bar_x, bar_y, bar_x + width, bar_y + bar_h], fill=(15, 15, 15, 225))
         draw.rectangle([bar_x, bar_y, bar_x + st.height * 0.008, bar_y + bar_h],
                        fill=(*st.accent, 255))
-        if reveal > 0.55:
-            alpha = int(255 * min(1.0, (reveal - 0.55) / 0.45))
-            tx = bar_x + st.height * 0.03
+
+        # Text only once the plate can actually hold it — fading it in earlier
+        # makes the words spill past the wipe, which reads as a broken render.
+        needed = full_w * 0.92
+        if width >= needed:
+            alpha = int(255 * min(1.0, (width - needed) / max(1.0, full_w * 0.08)))
+            tx = bar_x + pad
             draw.text((tx, bar_y + bar_h * 0.14), title, font=title_font,
                       fill=(*st.text, alpha))
             if subtitle:

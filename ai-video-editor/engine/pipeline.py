@@ -183,9 +183,14 @@ def build_graphic(project: Project, suggestion_id: str, kind: str = "",
         raise ValueError(f"'{kind}' is not implemented. Available: {gfx.available_kinds()}")
 
     info = project.data.get("media", {})
+    # Captions are only burned in when there is a transcript; without one the
+    # graphic may use the whole frame.
+    source_stem = Path(project.data["source"]).stem
+    has_captions = (project.root / "transcripts" / f"{source_stem}.json").exists()
     style = gfx.Style(width=int(info.get("width") or 1920),
                       height=int(info.get("height") or 1080),
-                      fps=int(round(float(info.get("fps") or 30))))
+                      fps=int(round(float(info.get("fps") or 30))),
+                      reserve_caption_band=has_captions)
 
     out = project.root / "graphics" / f"{suggestion_id}_{kind}.mov"
     values = [float(v.replace(",", ".")) for v in s.get("payload", {}).get("values", [])
