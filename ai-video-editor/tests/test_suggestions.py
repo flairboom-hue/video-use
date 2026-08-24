@@ -173,6 +173,15 @@ class TestComparability:
         s = detect(make_transcript([("In zwei Tagen kamen neun Fehler heraus.", 0.0)]))
         assert s and s[0].anchor_word.lower().strip(".") == "neun"
 
+    @pytest.mark.parametrize("sentence", [
+        "800 Meter, zehn Zonen, keine Checkpoints.",      # metres vs zones
+        "Acht Figuren, 54 Kosmetikteile, sieben Sprachen.",  # three unlike things
+    ])
+    def test_unlike_measures_in_one_sentence_do_not_become_a_chart(
+            self, sentence, make_transcript):
+        s = detect(make_transcript([(sentence, 0.0)]))
+        assert s and s[0].graphic_kind != "bar_chart"
+
     def test_two_figures_sharing_a_unit_do_become_a_chart(self, make_transcript):
         s = detect(make_transcript([
             ("Ich habe 31401 Zeilen geschrieben und 5338 wieder gelöscht.", 0.0)]))
@@ -193,6 +202,30 @@ class TestComparability:
         # People say "die Draw Calls fielen", not "ist gefallen".
         s = detect(make_transcript([(sentence, 0.0)]))
         assert s and s[0].graphic_kind == "comparison"
+
+
+class TestGermanPlaceDetection:
+    """German capitalises every noun, so capitalisation proves nothing."""
+
+    @pytest.mark.parametrize("sentence", [
+        "Jedes Modell besteht aus Kugeln und Zylindern.",
+        "Nach jedem Sturz bekommst du Post vom Gartenamt.",
+        "Der Gnom kommt aus Deutschland.",
+    ])
+    def test_a_capitalised_noun_after_a_preposition_is_not_a_place(
+            self, sentence, make_transcript):
+        # This fired on every second sentence of a German script before the
+        # locative-verb requirement — the detector became noise.
+        assert [s for s in detect(make_transcript([(sentence, 0.0)]))
+                if s.kind == "broll"] == []
+
+    @pytest.mark.parametrize("sentence", [
+        "Wir waren letztes Jahr in Tokio.",
+        "Ich bin nach Berlin gereist.",
+    ])
+    def test_a_place_with_a_locative_verb_still_fires(self, sentence, make_transcript):
+        assert [s for s in detect(make_transcript([(sentence, 0.0)]))
+                if s.kind == "broll"]
 
 
 class TestRestraint:

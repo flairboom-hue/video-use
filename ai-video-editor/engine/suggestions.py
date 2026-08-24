@@ -97,6 +97,13 @@ UNITS = {
     "ansaetze", "versuch", "versuche", "durchgang", "durchgänge", "entwurf",
     "entwürfe", "round", "rounds", "sprache", "sprachen", "language",
     "languages", "skript", "skripte", "script", "scripts", "datei", "dateien",
+    # measures and contents — without these, "800 Meter, zehn Zonen" looks
+    # comparable and becomes a chart chart of metres against zones
+    "meter", "metern", "kilometer", "meters", "figur", "figuren", "charakter",
+    "charaktere", "character", "characters", "kosmetikteil", "kosmetikteile",
+    "teil", "teile", "objekt", "objekte", "einzelobjekte", "stelle", "stellen",
+    "regelverstoß", "regelverstöße", "zeichenbefehl", "zeichenbefehle",
+    "kollisionsfläche", "kollisionsflächen", "checkpoint", "checkpoints",
 }
 
 # A German plural or compound rarely equals the stem: "Schnitten",
@@ -119,8 +126,18 @@ TIME_MARKERS = {"jahr", "jahre", "monat", "woche", "year", "years", "month",
                 "week", "zeitraum", "timeline", "seit", "since"}
 # Place detection without an NER model: a capitalized token that is not a
 # sentence opener and not a known non-place capitalized word.
-PLACE_HINTS = {"in", "nach", "aus", "bei", "von", "to", "from", "at", "visited",
-               "besucht", "waren", "war", "gewesen"}
+PLACE_HINTS = {"in", "nach", "aus", "bei", "von", "to", "from", "at"}
+
+# German capitalises every noun, so "capitalised word after a preposition" is
+# not a proper-noun signal at all — it fires on "besteht aus Kugeln" and "Post
+# vom Gartenamt". A locative VERB somewhere in the sentence is the discriminator
+# that actually separates "wir waren in Tokio" from "aus Kugeln zusammengesetzt".
+LOCATIVE_VERBS = {
+    "war", "waren", "warst", "gewesen", "besucht", "besuchte", "gereist",
+    "geflogen", "gefahren", "gelebt", "wohnte", "wohnten", "landete",
+    "angekommen", "unterwegs", "urlaub",
+    "visited", "went", "travelled", "traveled", "flew", "lived", "stayed",
+}
 
 STOP_CAPS = {"Ich", "Wir", "Du", "Sie", "Er", "Es", "Das", "Der", "Die", "Ein",
              "Eine", "Und", "Aber", "Dann", "Also", "Heute", "Hier", "I", "We",
@@ -332,6 +349,9 @@ def _places(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion]
     """B-roll candidates. Capitalized token preceded by a locative preposition."""
     out: list[Suggestion] = []
     for a, b in spans:
+        sentence = {_norm(w.text) for w in words[a:b + 1]}
+        if not sentence & LOCATIVE_VERBS:
+            continue
         for i in range(a + 1, b + 1):
             token = words[i].text.strip(".,!?")
             if not token[:1].isupper() or token in STOP_CAPS or len(token) < 3:
