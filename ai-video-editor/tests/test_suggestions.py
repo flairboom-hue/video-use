@@ -116,6 +116,49 @@ class TestDevlogVocabulary:
         assert s and s[0].graphic_kind == "timeline"
 
 
+class TestGermanSpeech:
+    """German ASR output is not the tidy digits-and-singulars a regex expects."""
+
+    @pytest.mark.parametrize("sentence", [
+        "In zwei Stunden kamen neun Fehler heraus.",
+        "Die Shopseite muss zwei Wochen sichtbar sein.",
+        "Dann kamen alle zehn Erfolge auf einen Schlag.",
+    ])
+    def test_numbers_spelled_as_words_still_count(self, sentence, make_transcript):
+        # Whisper writes small German numbers as words far more often than as
+        # digits, so a digits-only detector is deaf to most spoken counts.
+        assert detect(make_transcript([(sentence, 0.0)]))
+
+    def test_a_spelled_number_yields_its_digits_for_the_graphic(self, make_transcript):
+        s = detect(make_transcript([("Dann kamen alle zehn Erfolge.", 0.0)]))
+        assert s and "10" in s[0].payload["values"]
+
+    @pytest.mark.parametrize("sentence", [
+        "Der Trailer besteht aus 11 Schnitten.",       # dative plural
+        "Ich habe 20 Achievement-Icons gebaut.",       # hyphenated compound
+        "Das Spiel hat 12 Gegnertypen.",               # compound
+    ])
+    def test_inflected_and_compound_units_are_matched(self, sentence, make_transcript):
+        # Listing every German inflection is a losing game; a token counts if
+        # it opens or closes with a known stem.
+        assert detect(make_transcript([(sentence, 0.0)]))
+
+    def test_stem_matching_finds_units_and_leaves_other_nouns_alone(self):
+        from engine.suggestions import _unit_of
+        # Assert whether a unit is found, not which stem matched — the exact
+        # stem depends on vocabulary order and is not the behaviour that matters.
+        assert _unit_of("schnitten")           # dative plural of a known unit
+        assert _unit_of("achievementicons")    # hyphenated compound, normalised
+        assert _unit_of("gegnertypen")
+        assert not _unit_of("katzen")
+        assert not _unit_of("hunde")
+        assert not _unit_of("gartenzwerg")
+
+    def test_spelled_numbers_without_a_unit_stay_silent(self, make_transcript):
+        # The unit requirement is what keeps "zwei Katzen" from becoming a chart.
+        assert detect(make_transcript([("Ich habe zwei Katzen und drei Hunde.", 0.0)])) == []
+
+
 class TestRestraint:
     def test_a_bare_small_number_is_not_worth_a_graphic(self, make_transcript):
         t = make_transcript([("Ich habe zwei Katzen und 3 Hunde.", 0.0)])

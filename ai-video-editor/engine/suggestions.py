@@ -43,6 +43,18 @@ DECLINE = {"gesunken", "sank", "sinkt", "gefallen", "fiel", "reduziert",
 # hold on to. Percent and currency were the original test, which made the
 # detector useless outside a business report: a devlog says "4.200 Commits" or
 # "18 Monate", and neither carries a percent sign or a currency.
+# German ASR writes small numbers as words far more often than as digits, so a
+# digits-only detector is deaf to "zwei Stunden" and "alle zehn Erfolge" —
+# which is most of how people actually speak about small counts.
+NUMBER_WORDS = {
+    "null": 0, "eins": 1, "ein": 1, "eine": 1, "zwei": 2, "drei": 3, "vier": 4,
+    "fünf": 5, "fuenf": 5, "sechs": 6, "sieben": 7, "acht": 8, "neun": 9,
+    "zehn": 10, "elf": 11, "zwölf": 12, "zwoelf": 12, "zwanzig": 20,
+    "dreißig": 30, "dreissig": 30, "fünfzig": 50, "fuenfzig": 50, "hundert": 100,
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "twenty": 20,
+}
+
 UNITS = {
     # time
     "sekunde", "sekunden", "minute", "minuten", "stunde", "stunden",
@@ -64,9 +76,29 @@ UNITS = {
     "spieler", "spielerinnen", "tester", "wishlist", "wishlists",
     "download", "downloads", "review", "reviews", "follower", "abonnenten",
     "player", "players", "playtester", "subscribers", "wishlisted",
-    # performance
-    "fps", "frames", "ms", "kb", "mb", "gb",
+    # performance and rendering
+    "fps", "frames", "ms", "kb", "mb", "gb", "shader", "shadern",
+    "dreieck", "dreiecke", "polygon", "polygone", "draw", "drawcall",
+    "drawcalls", "triangle", "triangles", "vertices",
+    # things you make and ship
+    "erfolg", "erfolge", "icon", "icons", "schnitt", "schnitte", "screenshot",
+    "screenshots", "grafik", "grafiken", "zone", "zonen", "fehler", "bugs",
+    "cut", "cuts", "asset", "assets",
 }
+
+# A German plural or compound rarely equals the stem: "Schnitten",
+# "Achievement-Icons", "Gegnertypen". Listing every inflection is a losing
+# game, so a token counts if it opens or closes with a known stem.
+UNIT_STEMS = tuple(sorted(UNITS, key=len, reverse=True))
+
+
+def _unit_of(token: str) -> str:
+    if token in UNITS:
+        return token
+    for stem in UNIT_STEMS:
+        if len(stem) >= 4 and (token.startswith(stem) or token.endswith(stem)):
+            return stem
+    return ""
 COMPARISON = {"von", "auf", "from", "to", "versus", "vs", "gegenüber", "compared"}
 ORDINALS = {"erstens", "zweitens", "drittens", "viertens",
             "first", "second", "third", "fourth", "finally", "zuletzt"}
@@ -146,7 +178,8 @@ def _numbers(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion
     for a, b in spans:
         for i in range(a, b + 1):
             token = _norm(words[i].text)
-            if not NUMBER.match(token.replace("%", "")):
+            bare = token.replace("%", "")
+            if not (NUMBER.match(bare) or bare in NUMBER_WORDS):
                 continue
 
             context = {_norm(words[j].text) for j in range(max(a, i - 3), min(b, i + 3) + 1)}
@@ -157,15 +190,23 @@ def _numbers(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion
             # The unit has to FOLLOW the figure — "18 Monate", not "Monate 18".
             # Scanning both directions would fire on any number in a sentence
             # that happens to mention a unit somewhere.
-            after = {_norm(words[j].text) for j in range(i + 1, min(b, i + 3) + 1)}
-            unit = next((u for u in (after & UNITS)), "")
+            unit = ""
+            for j in range(i + 1, min(b, i + 3) + 1):
+                unit = _unit_of(_norm(words[j].text))
+                if unit:
+                    break
 
             # A bare number with nothing to count ("zwei Dinge") is not a graphic.
             if not (is_pct or is_money or direction or unit):
                 continue
 
-            values = [_norm(words[j].text) for j in range(a, b + 1)
-                      if NUMBER.match(_norm(words[j].text).replace("%", ""))]
+            values = []
+            for j in range(a, b + 1):
+                tok = _norm(words[j].text).replace("%", "")
+                if NUMBER.match(tok):
+                    values.append(tok)
+                elif tok in NUMBER_WORDS:
+                    values.append(str(NUMBER_WORDS[tok]))
             has_pair = len(values) >= 2 and bool(context & COMPARISON)
 
             # Percentages that add up to roughly a whole are shares of one
