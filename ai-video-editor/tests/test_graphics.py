@@ -9,7 +9,13 @@ from __future__ import annotations
 
 import pytest
 
-from engine.graphics import (CAPTION_SAFE_BOTTOM, GENERATORS, ICONS, Style,
+import shutil
+
+from PIL import ImageDraw
+
+from engine.graphics import (CAPTION_SAFE_BOTTOM, GENERATORS, ICONS,
+                             MOTION_BLUR_LEVELS, Style, _average_rgba,
+                             _hash_unit, _render,
                              available_icons, available_kinds, available_themes,
                              ease_in_out_cubic, ease_out_cubic, icon_row,
                              make_style, pie_chart)
@@ -69,6 +75,93 @@ class TestThemes:
                 assert min(colour) < 200, (
                     f"{name}.{role} {colour} is near-white and needs a panel "
                     "or a darker partner to survive bright footage")
+
+
+needs_ffmpeg = pytest.mark.skipif(
+    shutil.which("ffmpeg") is None,
+    reason="encodes a real clip; the rest of the suite stays ffmpeg-free")
+
+
+class TestMotionBlur:
+    def _moving_dot(self, mb: int, out, fps: int = 30):
+        st = Style(width=240, height=135, fps=fps, reserve_caption_band=False,
+                   motion_blur=mb, shutter=0.5)
+
+        def frame(draw, t, img):
+            x = 20 + 200 * t
+            draw.ellipse([x - 12, 55, x + 12, 79], fill=(255, 90, 0, 255))
+        return _render(frame, 0.4, st, out)
+
+    def test_off_by_default(self):
+        # It multiplies render time; nobody should pay that without asking.
+        assert Style().motion_blur == 0
+        assert MOTION_BLUR_LEVELS["off"] == 0
+
+    def test_levels_are_ordered_and_start_at_zero(self):
+        values = list(MOTION_BLUR_LEVELS.values())
+        assert values[0] == 0 and values == sorted(values)
+
+    @needs_ffmpeg
+    def test_blur_does_not_change_the_frame_count(self, tmp_path):
+        # Sub-frames are averaged into one output frame, not appended.
+        from PIL import Image  # noqa: F401  (guard: pillow present)
+        plain = self._moving_dot(0, tmp_path / "a.mov")
+        blurred = self._moving_dot(8, tmp_path / "b.mov")
+        assert plain.exists() and blurred.exists()
+
+    def test_blur_spreads_a_hard_edge_into_partial_coverage(self, tmp_path):
+        import numpy as np
+        from PIL import Image
+
+        def alpha_histogram(mb, name):
+            st = Style(width=240, height=135, fps=30, reserve_caption_band=False,
+                       motion_blur=mb, shutter=0.5)
+            img = Image.new("RGBA", (240, 135), (0, 0, 0, 0))
+            # Compose the middle frame the same way _render does.
+            frames = []
+            for k in range(max(1, mb)):
+                jitter = _hash_unit(4 * 977 + k) - 0.5
+                frac = ((k + 0.5 + jitter) / max(1, mb) - 0.5) if mb > 1 else 0.0
+                t = 0.5 + frac * (0.5 / 12)
+                f = Image.new("RGBA", (240, 135), (0, 0, 0, 0))
+                d = ImageDraw.Draw(f)
+                x = 20 + 200 * t
+                d.ellipse([x - 12, 55, x + 12, 79], fill=(255, 90, 0, 255))
+                frames.append(f)
+            img = _average_rgba(frames) if mb > 1 else frames[0]
+            a = np.asarray(img)[..., 3]
+            return (a > 250).sum(), ((a > 20) & (a < 250)).sum()
+
+        solid_plain, partial_plain = alpha_histogram(0, "plain")
+        solid_blur, partial_blur = alpha_histogram(16, "blur")
+        # A blurred fast move trades opaque pixels for a partially covered trail.
+        assert partial_blur > partial_plain
+        assert solid_blur < solid_plain
+
+    @needs_ffmpeg
+    def test_rendering_twice_produces_the_same_bytes(self, tmp_path):
+        # The jitter is seeded, not random: an unrelated re-render must not
+        # change the grain.
+        a = self._moving_dot(8, tmp_path / "one.mov").read_bytes()
+        b = self._moving_dot(8, tmp_path / "two.mov").read_bytes()
+        assert a == b
+
+    def test_samples_are_weighted_by_their_own_coverage(self):
+        import numpy as np
+        from PIL import Image
+
+        # Two samples that differ in BOTH colour and alpha — equal-colour
+        # samples cannot tell premultiplied averaging apart from naive
+        # averaging, because the unpremultiply step happens to cancel out.
+        opaque_red = Image.new("RGBA", (4, 4), (200, 0, 0, 255))
+        faint_blue = Image.new("RGBA", (4, 4), (0, 0, 200, 51))   # 20% covered
+        out = np.asarray(_average_rgba([opaque_red, faint_blue]))
+
+        # Correct: blue contributes only its 20% coverage -> ~33.
+        # Naive averaging would carry it at full strength -> ~167.
+        assert out[..., 2].mean() < 60, "faint sample carried at full strength"
+        assert 150 < out[..., 0].mean() < 185
+        assert 145 < out[..., 3].mean() < 160
 
 
 class TestEasing:

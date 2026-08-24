@@ -142,6 +142,7 @@ def health() -> dict:
         "caption_styles": cap.available_styles(),
         "graphic_kinds": gfx.available_kinds(),
         "graphic_themes": gfx.available_themes(),
+        "motion_blur_levels": gfx.available_motion_blur(),
         "icons": gfx.available_icons(),
         "aspects": list(ASPECTS),
     }
@@ -507,6 +508,15 @@ def _apply_command(project: Project, cmd: dict) -> dict:
         project.save()
         return {"message": f"Graphic theme set to {arg}. Re-render accepted "
                            "graphics to apply it."}
+
+    if name == "motion_blur":
+        arg = {"aus": "off"}.get(arg, arg)      # the German phrasing, normalised
+        project.data["settings"]["motion_blur"] = arg
+        project.save()
+        cost = {"off": "", "light": " (~7x render time)",
+                "normal": " (~13x)", "heavy": " (~20x)"}.get(arg, "")
+        return {"message": f"Motion blur set to {arg}{cost}. "
+                           "Re-render accepted graphics to apply it."}
 
     if name == "grade":
         project.data["settings"]["grade"] = arg

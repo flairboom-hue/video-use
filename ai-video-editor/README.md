@@ -79,6 +79,31 @@ without a plate or a contour, and it washes out on a light wall.
 
 Set it per project in the toolbar, or in the chat: *"nimm bold_outline"*.
 
+## Motion blur
+
+Rendered by temporal supersampling: each output frame is the average of
+several sub-frames spanning the open shutter, in premultiplied alpha so moving
+edges do not pick up a dark fringe. That is what a shutter physically does; a
+directional blur applied afterwards cannot know which pixels were moving or
+how fast.
+
+| Level | Samples | Render cost |
+|---|---|---|
+| `off` *(default)* | — | 1× |
+| `light` | 8 | ~7× |
+| `normal` | 16 | ~13× |
+| `heavy` | 24 | ~20× |
+
+Sub-frames are stratified and jittered with a seeded hash, so a fast move
+smears smoothly instead of showing countable arcs, and re-rendering the same
+graphic produces byte-identical output.
+
+**Where it actually helps is narrow.** These animations are deliberately slow
+and eased, so on a number counting up or a bar growing, blur changes a few
+hundred pixels and costs you seven times the render. It earns its keep on fast
+motion — a whip-in, a swipe, a spin. Default is off for that reason; turn it on
+per project when the movement is quick enough to strobe without it.
+
 ## Long-form or shorts?
 
 Long-form first. The defaults are 16:9 and a YouTube export; vertical is a

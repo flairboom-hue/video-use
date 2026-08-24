@@ -188,8 +188,11 @@ def build_graphic(project: Project, suggestion_id: str, kind: str = "",
     source_stem = Path(project.data["source"]).stem
     has_captions = (project.root / "transcripts" / f"{source_stem}.json").exists()
     theme = project.data["settings"].get("graphic_theme", "light_card")
+    blur = gfx.MOTION_BLUR_LEVELS.get(
+        str(project.data["settings"].get("motion_blur", "off")), 0)
     style = gfx.make_style(
         theme,
+        motion_blur=blur,
         width=int(info.get("width") or 1920),
         height=int(info.get("height") or 1080),
         fps=int(round(float(info.get("fps") or 30))),

@@ -65,6 +65,13 @@ class Style:
     panel_radius: float = 0.02      # fraction of frame height
     panel_inset: float = 0.06       # fraction of frame width
 
+    # Motion blur by temporal supersampling: render this many sub-frames per
+    # output frame across the shutter interval and average them. 0 disables it.
+    # This is what a real shutter does; a directional blur filter applied
+    # afterwards cannot know which pixels were moving or how fast.
+    motion_blur: int = 0
+    shutter: float = 0.5            # fraction of the frame interval the shutter is open
+
     reserve_caption_band: bool = True
 
     @property
@@ -175,13 +182,80 @@ def _encode(frames_dir: Path, out: Path, fps: int) -> Path:
     return out
 
 
+def _hash_unit(n: int) -> float:
+    """Deterministic pseudo-random value in [0, 1) from an integer.
+
+    Deliberately not `random`: a render must produce the same file every time,
+    or a re-render after an unrelated edit shows a different grain.
+    """
+    x = (n * 2654435761) & 0xFFFFFFFF
+    x ^= x >> 15
+    x = (x * 2246822519) & 0xFFFFFFFF
+    x ^= x >> 13
+    return x / 0x100000000
+
+
+def _compose_frame(draw_frame, t: float, style: Style) -> Image.Image:
+    img = Image.new("RGBA", (style.width, style.height), (0, 0, 0, 0))
+    draw_frame(ImageDraw.Draw(img), t, img)
+    return img
+
+
+def _average_rgba(samples: list[Image.Image]) -> Image.Image:
+    """Average RGBA samples in PREMULTIPLIED space.
+
+    Averaging straight RGB alongside alpha pulls transparent pixels' colour
+    (which is arbitrary, usually black) into the result, so every moving edge
+    picks up a dark fringe. Premultiplying first weights each sample's colour
+    by its own coverage, which is what makes the smear read as motion rather
+    than as a dirty outline.
+    """
+    import numpy as np
+
+    acc_rgb = None
+    acc_a = None
+    for im in samples:
+        arr = np.asarray(im, dtype=np.float32)
+        a = arr[..., 3:4] / 255.0
+        rgb = arr[..., :3] * a
+        acc_rgb = rgb if acc_rgb is None else acc_rgb + rgb
+        acc_a = a if acc_a is None else acc_a + a
+
+    n = len(samples)
+    mean_rgb = acc_rgb / n
+    mean_a = acc_a / n
+    # Unpremultiply, guarding the fully transparent pixels.
+    safe = np.maximum(mean_a, 1e-6)
+    out = np.concatenate([mean_rgb / safe, mean_a * 255.0], axis=-1)
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
+
+
 def _render(draw_frame, duration: float, style: Style, out: Path) -> Path:
     total = max(1, int(duration * style.fps))
+    samples = max(0, int(style.motion_blur))
+
     with tempfile.TemporaryDirectory() as tmp:
         d = Path(tmp)
         for n in range(total):
-            img = Image.new("RGBA", (style.width, style.height), (0, 0, 0, 0))
-            draw_frame(ImageDraw.Draw(img), n / total, img)
+            if samples <= 1:
+                img = _compose_frame(draw_frame, n / total, style)
+            else:
+                # Sub-frame offsets centred on the frame time, spanning the
+                # open shutter. Centring matters: sampling only forwards drags
+                # the whole animation late by half a shutter.
+                span = max(0.0, min(1.0, style.shutter)) / total
+                shots = []
+                for k in range(samples):
+                    # Stratified, then jittered within the stratum. Evenly
+                    # spaced samples on a fast move leave visible arcs — you can
+                    # count them. Jitter turns that banding into noise, which
+                    # reads as blur rather than as a stack of copies.
+                    # Seeded by frame and sample so renders stay reproducible.
+                    jitter = _hash_unit(n * 977 + k) - 0.5
+                    frac = (k + 0.5 + jitter) / samples - 0.5
+                    t = min(1.0, max(0.0, n / total + frac * span))
+                    shots.append(_compose_frame(draw_frame, t, style))
+                img = _average_rgba(shots)
             img.save(d / f"f{n:05d}.png")
         return _encode(d, out, style.fps)
 
@@ -675,6 +749,16 @@ THEMES: dict[str, dict] = {
         "panel": (255, 255, 255, 226), "panel_radius": 0.03, "panel_inset": 0.08,
     },
 }
+
+
+# Sample counts, not raw numbers, so the UI and the chat speak the same
+# language. Below ~12 the strata are still countable as arcs on a fast move;
+# above ~16 the cost stops buying visible smoothness.
+MOTION_BLUR_LEVELS = {"off": 0, "light": 8, "normal": 16, "heavy": 24}
+
+
+def available_motion_blur() -> list[str]:
+    return list(MOTION_BLUR_LEVELS)
 
 
 def available_themes() -> list[str]:
