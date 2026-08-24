@@ -25,14 +25,48 @@ from .transcribe import Transcript, Word
 
 # ---------------------------------------------------------------- patterns ---
 
-NUMBER = re.compile(r"^\d{1,3}(?:[.,]\d+)?$")
+# Up to three digits was fine for percentages and broke everything else: a
+# devlog says "4200 Commits", not "42 Prozent". Grouped forms ("4.200",
+# "4,200") count too, since ASR writes the separator either way.
+NUMBER = re.compile(r"^\d{1,3}(?:[.,]\d{3})+$|^\d{1,9}(?:[.,]\d{1,2})?$")
 PERCENT_WORD = {"prozent", "percent", "%"}
 CURRENCY = {"euro", "eur", "dollar", "usd", "millionen", "million", "milliarden",
             "billion", "tausend", "thousand", "k", "mio"}
-GROWTH = {"gestiegen", "gewachsen", "erhöht", "verdoppelt", "verdreifacht",
-          "increased", "grew", "doubled", "tripled", "up"}
-DECLINE = {"gesunken", "gefallen", "reduziert", "halbiert",
-           "decreased", "dropped", "fell", "halved", "down"}
+GROWTH = {"gestiegen", "stieg", "steigt", "gewachsen", "wuchs", "wächst",
+          "erhöht", "verdoppelt", "verdoppelte", "verdreifacht", "mehr",
+          "increased", "grew", "grows", "doubled", "tripled", "up", "more"}
+DECLINE = {"gesunken", "sank", "sinkt", "gefallen", "fiel", "reduziert",
+           "halbiert", "halbierte", "weniger",
+           "decreased", "dropped", "fell", "halved", "down", "less"}
+
+# A bare figure is only worth a graphic if it counts something the viewer can
+# hold on to. Percent and currency were the original test, which made the
+# detector useless outside a business report: a devlog says "4.200 Commits" or
+# "18 Monate", and neither carries a percent sign or a currency.
+UNITS = {
+    # time
+    "sekunde", "sekunden", "minute", "minuten", "stunde", "stunden",
+    "tag", "tage", "woche", "wochen", "monat", "monate", "jahr", "jahre",
+    "second", "seconds", "minute", "minutes", "hour", "hours",
+    "day", "days", "week", "weeks", "month", "months", "year", "years",
+    # making it
+    "commit", "commits", "zeile", "zeilen", "bug", "bugs", "feature",
+    "features", "build", "builds", "version", "versionen", "prototyp",
+    "prototypen", "iteration", "iterationen", "entwürfe", "anläufe",
+    "line", "lines", "iterations", "attempts", "versions",
+    # what is in the game
+    "level", "levels", "gegner", "gegnertypen", "boss", "bosse", "item",
+    "items", "waffe", "waffen", "karte", "karten", "map", "maps", "welt",
+    "welten", "track", "tracks", "song", "songs", "sound", "sounds",
+    "animation", "animationen", "sprite", "sprites", "achievement",
+    "achievements", "skin", "skins", "enemies", "worlds", "weapons",
+    # people and reach
+    "spieler", "spielerinnen", "tester", "wishlist", "wishlists",
+    "download", "downloads", "review", "reviews", "follower", "abonnenten",
+    "player", "players", "playtester", "subscribers", "wishlisted",
+    # performance
+    "fps", "frames", "ms", "kb", "mb", "gb",
+}
 COMPARISON = {"von", "auf", "from", "to", "versus", "vs", "gegenüber", "compared"}
 ORDINALS = {"erstens", "zweitens", "drittens", "viertens",
             "first", "second", "third", "fourth", "finally", "zuletzt"}
@@ -120,8 +154,14 @@ def _numbers(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion
             is_money = bool(context & CURRENCY)
             direction = "up" if context & GROWTH else ("down" if context & DECLINE else "")
 
-            # A bare small number ("zwei Dinge") is not worth a graphic.
-            if not (is_pct or is_money or direction):
+            # The unit has to FOLLOW the figure — "18 Monate", not "Monate 18".
+            # Scanning both directions would fire on any number in a sentence
+            # that happens to mention a unit somewhere.
+            after = {_norm(words[j].text) for j in range(i + 1, min(b, i + 3) + 1)}
+            unit = next((u for u in (after & UNITS)), "")
+
+            # A bare number with nothing to count ("zwei Dinge") is not a graphic.
+            if not (is_pct or is_money or direction or unit):
                 continue
 
             values = [_norm(words[j].text) for j in range(a, b + 1)
@@ -145,7 +185,10 @@ def _numbers(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion
                 kind = "bar_chart"
             else:
                 kind = "number_animation"
-            confidence = 0.9 if (is_pct and direction) else 0.75 if is_pct or is_money else 0.6
+            confidence = (0.9 if (is_pct and direction)
+                          else 0.75 if is_pct or is_money
+                          else 0.7 if (unit and direction)
+                          else 0.6)
 
             out.append(Suggestion(
                 id=f"g{len(out)}_{i}", kind="graphic", graphic_kind=kind,
@@ -153,10 +196,12 @@ def _numbers(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion
                 start=words[i].start, end=words[b].end, quote=_quote(words, a, b),
                 reason=("A percentage with a direction of change — a chart makes it land"
                         if is_pct and direction else
+                        f"A figure the viewer has to hold in their head ({unit}) — show it"
+                        if unit else
                         "A figure the viewer has to hold in their head — show it"),
                 confidence=confidence,
                 payload={"values": values, "percent": is_pct, "currency": is_money,
-                         "direction": direction},
+                         "direction": direction, "unit": unit},
             ))
             break   # one graphic per sentence is plenty
     return out

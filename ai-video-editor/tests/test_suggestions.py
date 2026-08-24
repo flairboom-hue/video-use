@@ -5,6 +5,8 @@ Both directions are asserted.
 """
 from __future__ import annotations
 
+import pytest
+
 from engine.suggestions import detect
 
 
@@ -59,6 +61,59 @@ class TestDetection:
         t = make_transcript([("Wir waren letztes Jahr in Tokio.", 0.0)])
         s = [x for x in detect(t) if x.kind == "broll"]
         assert s and s[0].payload["query"] == "Tokio"
+
+
+class TestDevlogVocabulary:
+    """A devlog counts commits and months, not euros and percent.
+
+    The original detector required a percent sign, a currency or a direction
+    word, which made it silent on almost everything a developer says.
+    """
+
+    @pytest.mark.parametrize("sentence", [
+        "Ich habe 18 Monate an dem Spiel gearbeitet.",
+        "Das sind über 4200 Commits.",
+        "Wir haben jetzt 3000 Wishlists auf Steam.",
+        "Der Playtest hatte 250 Spieler.",
+        "Ich habe 800 Bugs gefixt.",
+    ])
+    def test_a_figure_with_a_countable_unit_is_worth_a_graphic(self, sentence,
+                                                               make_transcript):
+        assert detect(make_transcript([(sentence, 0.0)]))
+
+    def test_four_digit_figures_are_recognised(self, make_transcript):
+        # The pattern allowed three digits, which is fine for percentages and
+        # silent on "4200 Commits".
+        s = detect(make_transcript([("Das sind über 4200 Commits.", 0.0)]))
+        assert s and s[0].payload["values"] == ["4200"]
+
+    def test_grouped_thousands_are_recognised(self, make_transcript):
+        # ASR writes the separator either way.
+        assert detect(make_transcript([("Ich habe 4.200 Zeilen Code geschrieben.", 0.0)]))
+
+    def test_the_unit_must_follow_the_figure(self, make_transcript):
+        # "Version 3" labels a thing; "3 Versionen" counts them. Scanning
+        # backwards as well would turn every ordinal label into a graphic.
+        # The unit here sits one word BEFORE the figure, so a backward scan
+        # would catch it and a forward-only scan must not.
+        labelled = detect(make_transcript([("Danach kam Version 3.", 0.0)]))
+        counted = detect(make_transcript([("Danach kamen 3 Versionen.", 0.0)]))
+        assert counted, "a counted unit after the figure should fire"
+        assert not labelled, "a unit before the figure is a label, not a count"
+
+    def test_a_verb_form_of_growth_still_counts(self, make_transcript):
+        # "stieg", not only "gestiegen".
+        s = detect(make_transcript([("Die Framerate stieg von 30 auf 60 FPS.", 0.0)]))
+        assert s and s[0].graphic_kind == "comparison"
+
+    def test_a_number_without_a_unit_is_still_ignored(self, make_transcript):
+        assert detect(make_transcript([("Ich habe zwei Katzen und 3 Hunde.", 0.0)])) == []
+
+    def test_years_still_go_to_the_timeline_not_the_counter(self, make_transcript):
+        # Widening the number pattern made years matchable; they must not
+        # steal the timeline's anchor.
+        s = detect(make_transcript([("Zwischen 2019 und 2024 hat sich viel verändert.", 0.0)]))
+        assert s and s[0].graphic_kind == "timeline"
 
 
 class TestRestraint:
