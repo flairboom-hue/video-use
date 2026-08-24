@@ -32,10 +32,15 @@ NUMBER = re.compile(r"^\d{1,3}(?:[.,]\d{3})+$|^\d{1,9}(?:[.,]\d{1,2})?$")
 PERCENT_WORD = {"prozent", "percent", "%"}
 CURRENCY = {"euro", "eur", "dollar", "usd", "millionen", "million", "milliarden",
             "billion", "tausend", "thousand", "k", "mio"}
-GROWTH = {"gestiegen", "stieg", "steigt", "gewachsen", "wuchs", "wächst",
-          "erhöht", "verdoppelt", "verdoppelte", "verdreifacht", "mehr",
+# Finite verb forms, singular AND plural: people say "die Draw Calls fielen",
+# not "die Draw Calls ist gefallen". Missing the plural made the detector
+# silent on exactly the sentences a developer speaks.
+GROWTH = {"gestiegen", "stieg", "stiegen", "steigt", "steigen", "gewachsen",
+          "wuchs", "wuchsen", "wächst", "wachsen", "erhöht", "erhöhte",
+          "verdoppelt", "verdoppelte", "verdreifacht", "mehr",
           "increased", "grew", "grows", "doubled", "tripled", "up", "more"}
-DECLINE = {"gesunken", "sank", "sinkt", "gefallen", "fiel", "reduziert",
+DECLINE = {"gesunken", "sank", "sanken", "sinkt", "sinken", "gefallen",
+           "fiel", "fielen", "fällt", "fallen", "reduziert", "reduzierte",
            "halbiert", "halbierte", "weniger",
            "decreased", "dropped", "fell", "halved", "down", "less"}
 
@@ -47,7 +52,10 @@ DECLINE = {"gesunken", "sank", "sinkt", "gefallen", "fiel", "reduziert",
 # digits-only detector is deaf to "zwei Stunden" and "alle zehn Erfolge" —
 # which is most of how people actually speak about small counts.
 NUMBER_WORDS = {
-    "null": 0, "eins": 1, "ein": 1, "eine": 1, "zwei": 2, "drei": 3, "vier": 4,
+    # "ein"/"eine" are articles far more often than numerals ("eine Datei"),
+    # and counting them turns every sentence into a two-value comparison.
+    # "eins" is the numeral and stays.
+    "null": 0, "eins": 1, "zwei": 2, "drei": 3, "vier": 4,
     "fünf": 5, "fuenf": 5, "sechs": 6, "sieben": 7, "acht": 8, "neun": 9,
     "zehn": 10, "elf": 11, "zwölf": 12, "zwoelf": 12, "zwanzig": 20,
     "dreißig": 30, "dreissig": 30, "fünfzig": 50, "fuenfzig": 50, "hundert": 100,
@@ -84,6 +92,11 @@ UNITS = {
     "erfolg", "erfolge", "icon", "icons", "schnitt", "schnitte", "screenshot",
     "screenshots", "grafik", "grafiken", "zone", "zonen", "fehler", "bugs",
     "cut", "cuts", "asset", "assets",
+    # attempts and rebuilds — what a devlog counts when it is being honest
+    "runde", "runden", "anlauf", "anläufe", "anlaeufe", "ansatz", "ansätze",
+    "ansaetze", "versuch", "versuche", "durchgang", "durchgänge", "entwurf",
+    "entwürfe", "round", "rounds", "sprache", "sprachen", "language",
+    "languages", "skript", "skripte", "script", "scripts", "datei", "dateien",
 }
 
 # A German plural or compound rarely equals the stem: "Schnitten",
@@ -201,12 +214,22 @@ def _numbers(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion
                 continue
 
             values = []
+            unit_by_value: dict[int, str] = {}
             for j in range(a, b + 1):
                 tok = _norm(words[j].text).replace("%", "")
                 if NUMBER.match(tok):
                     values.append(tok)
                 elif tok in NUMBER_WORDS:
                     values.append(str(NUMBER_WORDS[tok]))
+                else:
+                    continue
+                # The unit this particular figure carries, if any.
+                own = ""
+                for k in range(j + 1, min(b, j + 3) + 1):
+                    own = _unit_of(_norm(words[k].text))
+                    if own:
+                        break
+                unit_by_value[len(values) - 1] = own
             has_pair = len(values) >= 2 and bool(context & COMPARISON)
 
             # Percentages that add up to roughly a whole are shares of one
@@ -216,13 +239,19 @@ def _numbers(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion
             is_whole = (is_pct and len(numeric) >= 3
                         and 92 <= sum(numeric) <= 108)
 
+            # Bars compare like with like. "In zwei Tagen kamen neun Fehler"
+            # has two figures and nothing to compare — charting days against
+            # bugs is a graphic that means nothing. Only build one when the
+            # figures carry no CONFLICTING unit.
+            named_units = {u for u in unit_by_value.values() if u}
+            comparable = len(named_units) <= 1
+
             # A "bar chart" of one bar communicates nothing — it is a number.
-            # Bars only earn their place once there is something to compare to.
             if is_whole:
                 kind = "pie_chart"
-            elif has_pair:
+            elif has_pair and comparable:
                 kind = "comparison"
-            elif len(values) >= 2:
+            elif len(values) >= 2 and comparable:
                 kind = "bar_chart"
             else:
                 kind = "number_animation"
@@ -231,9 +260,21 @@ def _numbers(words: list[Word], spans: list[tuple[int, int]]) -> list[Suggestion
                           else 0.7 if (unit and direction)
                           else 0.6)
 
+            anchor_idx = i
+            if not comparable:
+                for j in range(b, a - 1, -1):
+                    tok = _norm(words[j].text).replace("%", "")
+                    if not (NUMBER.match(tok) or tok in NUMBER_WORDS):
+                        continue
+                    if any(_unit_of(_norm(words[k].text))
+                           for k in range(j + 1, min(b, j + 3) + 1)):
+                        anchor_idx = j
+                        break
+
             out.append(Suggestion(
                 id=f"g{len(out)}_{i}", kind="graphic", graphic_kind=kind,
-                anchor_word=words[i].text, anchor_occurrence=_occurrence_index(words, i),
+                anchor_word=words[anchor_idx].text,
+                anchor_occurrence=_occurrence_index(words, anchor_idx),
                 start=words[i].start, end=words[b].end, quote=_quote(words, a, b),
                 reason=("A percentage with a direction of change — a chart makes it land"
                         if is_pct and direction else

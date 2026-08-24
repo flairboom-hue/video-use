@@ -159,6 +159,42 @@ class TestGermanSpeech:
         assert detect(make_transcript([("Ich habe zwei Katzen und drei Hunde.", 0.0)])) == []
 
 
+class TestComparability:
+    """Two figures only make a chart when they measure the same thing."""
+
+    def test_conflicting_units_do_not_become_a_bar_chart(self, make_transcript):
+        # Days against bugs is a chart that means nothing.
+        s = detect(make_transcript([("In zwei Tagen kamen neun Fehler heraus.", 0.0)]))
+        assert s and s[0].graphic_kind == "number_animation"
+
+    def test_conflicting_units_anchor_on_the_figure_the_sentence_is_about(
+            self, make_transcript):
+        # "neun Fehler" is the payload; "zwei Tage" is the setting.
+        s = detect(make_transcript([("In zwei Tagen kamen neun Fehler heraus.", 0.0)]))
+        assert s and s[0].anchor_word.lower().strip(".") == "neun"
+
+    def test_two_figures_sharing_a_unit_do_become_a_chart(self, make_transcript):
+        s = detect(make_transcript([
+            ("Ich habe 31401 Zeilen geschrieben und 5338 wieder gelöscht.", 0.0)]))
+        assert s and s[0].graphic_kind == "bar_chart"
+
+    def test_an_article_is_not_a_number(self, make_transcript):
+        # "eine Datei" counted as the numeral 1 turned every such sentence
+        # into a two-value comparison.
+        s = detect(make_transcript([("Das Spiel ist eine Datei mit 26063 Zeilen.", 0.0)]))
+        assert s and s[0].graphic_kind == "number_animation"
+        assert s[0].payload["values"] == ["26063"]
+
+    @pytest.mark.parametrize("sentence", [
+        "Die Draw Calls fielen von 968 auf 730.",
+        "Die Shader stiegen von 34 auf 51.",
+    ])
+    def test_plural_verb_forms_count_as_direction(self, sentence, make_transcript):
+        # People say "die Draw Calls fielen", not "ist gefallen".
+        s = detect(make_transcript([(sentence, 0.0)]))
+        assert s and s[0].graphic_kind == "comparison"
+
+
 class TestRestraint:
     def test_a_bare_small_number_is_not_worth_a_graphic(self, make_transcript):
         t = make_transcript([("Ich habe zwei Katzen und 3 Hunde.", 0.0)])
