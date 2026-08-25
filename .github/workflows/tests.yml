@@ -37,7 +37,9 @@ jobs:
       - name: Run tests (ai-video-editor)
         working-directory: ai-video-editor
         run: |
-          pip install pillow
+          # numpy is a test-only dependency here: the app renders with Pillow,
+          # but the motion-blur and geometry assertions read frames as arrays.
+          pip install pillow numpy
           pytest -q
 
   lint:

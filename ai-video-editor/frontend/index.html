@@ -332,10 +332,17 @@ $("#bHigh").onclick   = () => bulk({action:"accept", min_confidence:0.75}, "Sich
 $("#bNone").onclick   = () => { if (confirm("Alle offenen Vorschläge ablehnen?"))
                                   bulk({action:"reject"}, "Alle abgelehnt"); };
 window.change = id => {
-  const kinds = HEALTH.graphic_kinds;
-  const k = prompt("Grafiktyp:\n" + kinds.join("\n"), kinds[0]);
-  if (k && kinds.includes(k)) accept(id, k);
-  else if (k) toast(`"${k}" ist nicht implementiert`);
+  // Kinds that need explicit parameters are listed but not offered here: the
+  // picker has no way to ask for a formula, so choosing one could only fail.
+  const needsParams = HEALTH.param_only_kinds || [];
+  const kinds = HEALTH.graphic_kinds.filter(k => !needsParams.includes(k));
+  const note = needsParams.length
+    ? `\n\nNur über die API (brauchen Parameter): ${needsParams.join(", ")}` : "";
+  const k = prompt("Grafiktyp:\n" + kinds.join("\n") + note, kinds[0]);
+  if (!k) return;
+  if (kinds.includes(k)) accept(id, k);
+  else if (needsParams.includes(k)) toast(`"${k}" braucht Parameter — nur über die API`);
+  else toast(`"${k}" ist nicht implementiert`);
 };
 
 function drawTimeline(tl, dur) {

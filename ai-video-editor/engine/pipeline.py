@@ -166,6 +166,22 @@ def run_analysis(project: Project, on_progress: Progress = _noop) -> None:
 
 # --------------------------------------------------------------- graphics ---
 
+# Kinds whose content cannot be derived from a detected figure: they describe a
+# relationship, not a number, so they only build with explicit params. Surfaced
+# through the health endpoint so the picker can say so instead of offering a
+# choice that always fails.
+PARAM_ONLY_KINDS = {"linked_meters"}
+
+
+def _fmt(value: float) -> str:
+    """A detected figure as a stat card shows it: German separators, no
+    trailing zero on a whole number."""
+    if float(value).is_integer():
+        return f"{int(value):,}".replace(",", "\u202f")
+    return f"{value:,.1f}".replace(",", "\u202f").replace(".", ",")
+
+
+
 def build_graphic(project: Project, suggestion_id: str, kind: str = "",
                   params: dict | None = None) -> Overlay:
     """Render one accepted suggestion into an overlay clip.
@@ -225,6 +241,28 @@ def build_graphic(project: Project, suggestion_id: str, kind: str = "",
     elif kind == "icon_row":
         gfx.icon_row(out, params.get("items") or
                      [("check", w) for w in s.get("quote", "").split()[:4]], style)
+    elif kind == "stat_card":
+        entries = params.get("entries") or [
+            (_fmt(v), lb) for v, lb in
+            zip(values, (params.get("labels") or [""] * len(values)))]
+        gfx.stat_card(out, [tuple(e) for e in entries], style)
+    elif kind == "bar_chart_h":
+        rows = params.get("rows") or list(
+            zip(params.get("labels") or [""] * len(values), values))
+        gfx.bar_chart_h(out, [tuple(r) for r in rows], style, suffix=suffix)
+    elif kind == "linked_meters":
+        # The only kind that cannot be inferred from a detected figure: it
+        # describes a formula, so it needs the formula spelled out.
+        meters = params.get("meters")
+        if not params.get("control") or not meters:
+            raise ValueError(
+                "linked_meters needs params 'control' (the slider label) and "
+                "'meters' ([label, base, factor, unit], value = base + factor "
+                "* control)")
+        gfx.linked_meters(out, params["control"], [tuple(m) for m in meters],
+                          style, sweeps=int(params.get("sweeps", 2)))
+    else:                                       # pragma: no cover - guarded above
+        raise ValueError(f"'{kind}' has no builder in the pipeline")
 
     duration = media.probe(out).duration
     overlay = Overlay(file=str(out), duration=duration,

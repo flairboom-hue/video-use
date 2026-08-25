@@ -32,7 +32,7 @@ fixes it, and the pipeline continues with what it can still do.
 | Scenes | PySceneDetect shot boundaries |
 | Transcript | WhisperX, word-level timestamps, SRT + VTT export |
 | Suggestions | Numbers, comparisons, lists, timelines, places → anchored proposals with a reason |
-| Graphics | 9 animated types (number, vertical and horizontal bars, pie/donut, comparison, stat card, icon row, lower third, kinetic type) in 4 themes, rendered with alpha, eased, caption-safe |
+| Graphics | 10 animated types (number, vertical and horizontal bars, pie/donut, comparison, stat card, icon row, linked meters, lower third, kinetic type) in 4 themes, rendered with alpha, eased, caption-safe |
 | Captions | 4 styles incl. per-word karaoke highlighting, correct output-timeline offsets |
 | Render | Segment extract → lossless concat → overlays (PTS-shifted) → captions last → −14 LUFS |
 | Aspects | 16:9, 9:16, 1:1, 4:5 — video cropped to fill, overlays fitted so they stay intact |

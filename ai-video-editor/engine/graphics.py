@@ -136,6 +136,26 @@ def _write(draw: ImageDraw.ImageDraw, xy, text: str, font, fill, st: "Style") ->
         draw.text(xy, text, font=font, fill=fill)
 
 
+def _track(st: "Style", strength: float = 0.22) -> tuple[int, int, int, int]:
+    """The colour of an empty meter track, drawn OPAQUE.
+
+    Pillow's ImageDraw replaces pixels rather than blending, so a
+    semi-transparent shape drawn over the panel punches a hole in it — on a
+    light card the "empty" part of a bar then shows the footage through and
+    reads as near-black. Mixing the colour against the panel here and drawing
+    it at full alpha keeps the card intact.
+    """
+    ink = st.muted
+    if st.panel:
+        base = st.panel[:3]
+    else:
+        # No card: fall back to a translucent tint, which is correct because
+        # there is nothing underneath to punch through.
+        return (*ink, int(255 * strength))
+    mixed = tuple(round(b + (i - b) * strength) for i, b in zip(ink, base))
+    return (*mixed, 255)
+
+
 def _shape_edge(st: "Style", alpha: int = 255) -> tuple:
     """Contour colour and width for filled shapes, or (None, 0).
 
@@ -858,6 +878,109 @@ def bar_chart_h(out: Path, items: list[tuple[str, float]], style: Style | None =
     return _render(frame, dur, st, out)
 
 
+def linked_meters(out: Path, control: str, meters: list[tuple[str, float, float, str]],
+                  style: Style | None = None, duration: float | None = None,
+                  sweeps: int = 2) -> Path:
+    """One control, several readouts that move together.
+
+    Built for the case where a diagram has to show *coupling* rather than
+    values: two quantities driven by the same input, so the viewer sees that
+    one cannot be raised without the other. A pair of static bars cannot say
+    that; the shared handle can.
+
+    `meters` is [(label, base, factor, unit), ...] — each readout is
+    `base + factor * control`, which is how the underlying formula is usually
+    written down. The control sweeps 0 -> 1 -> 0 so the coupling is visible in
+    both directions; a single sweep reads as two bars that happen to grow.
+    """
+    st = style or Style()
+    if not meters:
+        raise GraphicsError("linked_meters needs at least one meter")
+
+    dur = duration or (2.2 * sweeps + st.hold)
+    rows = [(str(la), float(b), float(f), str(u)) for la, b, f, u in meters]
+    # Normalise against the largest value the meter actually reaches, not
+    # against base + factor: a negative factor is the interesting case (one
+    # quantity bought with the other), and there the peak is at charge 0.
+    peak = [max(b, b + f) for _, b, f, _ in rows]
+    for (label, *_), top_value in zip(rows, peak):
+        if top_value <= 0:
+            raise GraphicsError(f"meter {label!r} never reaches a positive value")
+
+    title_font = st.font(int(st.height * 0.030))
+    label_font = st.font(int(st.height * 0.032))
+    value_font = st.font(int(st.height * 0.042))
+
+    track_x = st.width * 0.30
+    track_w = st.width * 0.50
+    handle_r = st.height * 0.020
+
+    row_h = st.content_height * 0.20
+    bar_h = row_h * 0.42
+    # The control sits one row above the first readout, so the block is
+    # (len(rows) + 1) rows tall and `top` is the control's centre.
+    top = (st.content_height - row_h * len(rows)) / 2
+
+    # Hug the rows. A card sized to the frame leaves a two-meter diagram
+    # floating in a sea of empty plate, which is what the first version did.
+    pad = row_h * 0.55
+    band = (top - pad, top + row_h * len(rows) + pad)
+
+    def frame(draw, t, img):
+        _panel(draw, st, band=band)
+        elapsed = t * dur
+        active = min(1.0, elapsed / (dur - st.hold)) if dur > st.hold else 1.0
+        # Triangle wave: up and back down, `sweeps` times, then hold at full.
+        if elapsed >= dur - st.hold:
+            charge = 1.0
+        else:
+            phase = (active * sweeps) % 1.0
+            charge = ease_in_out_cubic(phase * 2 if phase < 0.5 else (1 - phase) * 2)
+
+        # -- the control -------------------------------------------------
+        cy = top
+        lw, lh = _text_size(draw, control.upper(), title_font)
+        _write(draw, (track_x - lw - st.width * 0.03, cy - lh / 2),
+               control.upper(), title_font, (*st.text, 255), st)
+
+        edge, ew = _shape_edge(st)
+        draw.rounded_rectangle(
+            [track_x, cy - handle_r * 0.32, track_x + track_w, cy + handle_r * 0.32],
+            radius=int(handle_r * 0.32), fill=_track(st, 0.30))
+        hx = track_x + track_w * charge
+        draw.rounded_rectangle(
+            [track_x, cy - handle_r * 0.32, hx, cy + handle_r * 0.32],
+            radius=int(handle_r * 0.32), fill=(*st.accent, 255))
+        draw.ellipse([hx - handle_r, cy - handle_r, hx + handle_r, cy + handle_r],
+                     fill=(*st.accent, 255), outline=edge, width=ew)
+
+        # -- the readouts ------------------------------------------------
+        for i, (label, base, factor, unit) in enumerate(rows):
+            value = base + factor * charge
+            y = top + row_h * (i + 1)
+
+            lw, lh = _text_size(draw, label.upper(), label_font)
+            _write(draw, (track_x - lw - st.width * 0.03, y - lh / 2),
+                   label.upper(), label_font, (*st.text, 255), st)
+
+            draw.rounded_rectangle(
+                [track_x, y - bar_h / 2, track_x + track_w, y + bar_h / 2],
+                radius=int(bar_h * 0.28), fill=_track(st))
+            width = track_w * max(0.0, value / peak[i])
+            colour = st.accent if i == 0 else st.accent_2
+            draw.rounded_rectangle(
+                [track_x, y - bar_h / 2, track_x + width, y + bar_h / 2],
+                radius=int(bar_h * 0.28), fill=(*colour, 255),
+                outline=edge, width=ew)
+
+            shown = f"{value:,.1f}".replace(".", ",") + (f" {unit}" if unit else "")
+            vw, vh = _text_size(draw, shown, value_font)
+            _write(draw, (track_x + track_w + st.width * 0.018, y - vh / 2),
+                   shown, value_font, (*st.muted, 255), st)
+
+    return _render(frame, dur, st, out)
+
+
 THEMES: dict[str, dict] = {
     # The original: assumes dark or busy footage, no plate.
     "dark_minimal": {
@@ -926,6 +1049,7 @@ GENERATORS = {
     "icon_row": icon_row,
     "stat_card": stat_card,
     "bar_chart_h": bar_chart_h,
+    "linked_meters": linked_meters,
 }
 
 

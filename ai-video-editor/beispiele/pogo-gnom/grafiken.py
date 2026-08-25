@@ -20,8 +20,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from engine.graphics import (  # noqa: E402
-    bar_chart, bar_chart_h, comparison, make_style, number_animation,
-    stat_card, text_animation,
+    bar_chart, bar_chart_h, comparison, linked_meters, make_style,
+    number_animation, stat_card, text_animation,
 )
 
 # light_card carries its own plate, so the graphics stay readable over both the
@@ -52,6 +52,15 @@ def build(out_dir: Path) -> list[Path]:
     keep(bar_chart(out_dir / "0-08_geschrieben_geloescht.mov",
                    [31401, 5338], ["geschrieben", "gelöscht"], st,
                    suffix=" Zeilen"))
+
+    # 1:45 · Pogo-Physik. Ein Regler, zwei Balken: die Ladung bestimmt Höhe
+    # UND Weite, man kann also nicht das eine ohne das andere haben. Genau das
+    # sagen zwei statische Balken nicht — der gemeinsame Regler schon.
+    #   Sprung senkrecht   vy = 9 + Ladung * 15
+    #   Sprung waagerecht  h  = 3 + Ladung * 8
+    keep(linked_meters(out_dir / "1-45_pogophysik.mov", "Ladung", [
+        ("Höhe", 9.0, 15.0, ""), ("Weite", 3.0, 8.0, ""),
+    ], st))
 
     # 2:30 · Landefenster. Elf benannte Zonen: waagerecht, weil senkrechte
     # Balken bei elf Kategorien die Beschriftung kippen müssten.

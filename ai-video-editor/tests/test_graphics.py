@@ -237,3 +237,156 @@ class TestIconRowGuards:
     def test_empty_items_are_refused(self, tmp_path):
         with pytest.raises(Exception):
             icon_row(tmp_path / "x.mov", [])
+
+
+class TestMeterTrack:
+    """The empty part of a bar.
+
+    Pillow's ImageDraw replaces pixels instead of blending them, so a
+    translucent track drawn over the card cuts a hole straight through it and
+    the footage shows where the card should be. On a light theme that reads as
+    a near-black bar — the exact opposite of "empty".
+    """
+
+    @staticmethod
+    def _panel_themes():
+        return [n for n in available_themes() if make_style(n, width=100, height=100).panel]
+
+    def test_a_track_on_a_card_is_opaque(self):
+        from engine.graphics import _track
+        for name in self._panel_themes():
+            st = make_style(name, width=100, height=100)
+            assert _track(st)[3] == 255, f"{name}: translucent track punches through the card"
+
+    def test_a_track_on_a_card_stays_near_the_card(self):
+        from engine.graphics import _track
+        for name in self._panel_themes():
+            st = make_style(name, width=100, height=100)
+            track = _track(st)[:3]
+            to_panel = sum(abs(a - b) for a, b in zip(track, st.panel[:3]))
+            to_muted = sum(abs(a - b) for a, b in zip(track, st.muted))
+            assert to_panel < to_muted, f"{name}: empty track reads as ink, not as empty"
+
+    def test_a_track_is_still_visible_against_the_card(self):
+        # The other failure: mix it too far towards the card and the bar has
+        # no visible extent at all until it fills.
+        from engine.graphics import _track
+        for name in self._panel_themes():
+            st = make_style(name, width=100, height=100)
+            spread = max(abs(a - b) for a, b in zip(_track(st)[:3], st.panel[:3]))
+            assert spread >= 8, f"{name}: track is indistinguishable from the card"
+
+    def test_strength_moves_the_track_towards_the_ink(self):
+        from engine.graphics import _track
+        st = make_style("light_card", width=100, height=100)
+        near = sum(abs(a - b) for a, b in zip(_track(st, 0.20)[:3], st.panel[:3]))
+        far = sum(abs(a - b) for a, b in zip(_track(st, 0.40)[:3], st.panel[:3]))
+        assert far > near
+
+    def test_without_a_card_the_track_is_a_translucent_tint(self):
+        # Nothing to punch through, so a tint is the right answer here.
+        from engine.graphics import _track
+        for name in available_themes():
+            st = make_style(name, width=100, height=100)
+            if st.panel:
+                continue
+            colour = _track(st)
+            assert colour[:3] == tuple(st.muted)
+            assert 0 < colour[3] < 255
+
+
+class TestLinkedMeters:
+    """Two readouts on one control."""
+
+    @staticmethod
+    def _frame(meters, t, theme="dark_minimal", size=1000, **kw):
+        """Compose a single frame without going near ffmpeg."""
+        from pathlib import Path
+
+        from PIL import Image
+
+        from engine import graphics
+        captured = {}
+
+        def fake_render(frame, dur, st, out):
+            captured["frame"] = frame
+            return out
+
+        real, graphics._render = graphics._render, fake_render
+        try:
+            graphics.linked_meters(Path("unused.mov"), "Ladung", meters,
+                                   style=make_style(theme, width=size, height=size), **kw)
+        finally:
+            graphics._render = real
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        captured["frame"](ImageDraw.Draw(img), t, img)
+        return img
+
+    def test_it_is_registered(self):
+        assert "linked_meters" in available_kinds()
+
+    def test_empty_input_is_refused(self, tmp_path):
+        from engine.graphics import linked_meters
+        with pytest.raises(Exception):
+            linked_meters(tmp_path / "x.mov", "Ladung", [])
+
+    def test_a_meter_that_never_goes_positive_is_refused(self, tmp_path):
+        # base 0, factor 0 used to divide by zero deep inside the frame
+        # callback — a crash in a background job rather than a rejected input.
+        from engine.graphics import GraphicsError, linked_meters
+        with pytest.raises(GraphicsError):
+            linked_meters(tmp_path / "x.mov", "Ladung", [("Tot", 0.0, 0.0, "")])
+
+    def test_a_falling_meter_stays_inside_its_track(self):
+        import numpy as np
+
+        # A negative factor is the interesting coupling — one quantity bought
+        # with the other. Normalising against base + factor puts the peak at
+        # charge 0, which drew the bar several track-widths past the frame.
+        img = self._frame([("Hoehe", 10.0, -8.0, "m"), ("Weite", 2.0, 8.0, "m")], 0.0)
+        accent = make_style("dark_minimal", width=1000, height=1000).accent
+        px = np.asarray(img)
+        hit = (px[..., 0] == accent[0]) & (px[..., 1] == accent[1]) & (px[..., 2] == accent[2])
+        assert hit.any(), "nothing was drawn in the accent colour"
+        right = int(np.argwhere(hit)[:, 1].max())
+        track_right = 1000 * (0.30 + 0.50)
+        assert right <= track_right + 2, "the bar ran past the end of its track"
+        assert right > track_right - 20, "the bar should be full at its own peak"
+
+    def test_the_card_hugs_the_meters(self):
+        # A card sized to the frame leaves a two-row diagram floating in a sea
+        # of empty plate. Measured against the unbanded card rather than
+        # against the frame: _panel already insets itself, so a frame-relative
+        # threshold passes whether the band is honoured or not.
+        from PIL import Image
+
+        from engine.graphics import _panel
+        st = make_style("light_card", width=1000, height=1000)
+        unbanded = Image.new("RGBA", (1000, 1000), (0, 0, 0, 0))
+        _panel(ImageDraw.Draw(unbanded), st)
+        full = unbanded.getbbox()[3] - unbanded.getbbox()[1]
+
+        img = self._frame([("A", 3.0, 8.0, ""), ("B", 9.0, 15.0, "")], 1.0,
+                          theme="light_card")
+        drawn = img.getbbox()[3] - img.getbbox()[1]
+        assert drawn < full, "the card is not sized to its content"
+
+    def test_both_readouts_move_with_the_control(self):
+        import numpy as np
+
+        def reach(t):
+            img = self._frame([("A", 3.0, 8.0, ""), ("B", 9.0, 15.0, "")], t)
+            px = np.asarray(img)
+            st = make_style("dark_minimal", width=1000, height=1000)
+            out = []
+            for colour in (st.accent, st.accent_2):
+                hit = ((px[..., 0] == colour[0]) & (px[..., 1] == colour[1])
+                       & (px[..., 2] == colour[2]))
+                rows = np.argwhere(hit)
+                out.append(int(rows[:, 1].max()) if len(rows) else 0)
+            return out
+
+        low = reach(0.0)
+        high = reach(1.0)
+        # The whole point of the graphic: one input, both readouts follow.
+        assert high[0] > low[0] and high[1] > low[1]

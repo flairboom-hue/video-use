@@ -112,7 +112,7 @@ leere Garten über das alte Speicherprofil.
 
 ## Die Grafiken
 
-Elf sind bereits gerendert (1920×1080, Alphakanal, Design `light_card`).
+Zwölf sind bereits gerendert (1920×1080, Alphakanal, Design `light_card`).
 Verankert werden sie an gesprochenen Wörtern, nicht an Zeitpunkten — schneidest
 du um, wandern sie mit.
 
@@ -121,6 +121,7 @@ du um, wandern sie mit.
 | `0-45_kapitel` | 0:45 | Kapitelkarte |
 | `0-08_zahlenkarte1` | 0:08 | „26 063" |
 | `0-08_geschrieben_geloescht` | 0:08 | „31 401" |
+| `1-45_pogophysik` | 1:45 | „Ladung" |
 | `2-30_landefenster` | 2:30 | Vollbild, kein Anker |
 | `5-15_zahlenkarte2` | 5:15 | „acht" |
 | `5-15_drawcalls` | 5:15 | „991" |
@@ -130,8 +131,16 @@ du um, wandern sie mit.
 | `9-00_geometrie` | 9:00 | „44" |
 | `10-20_bilanz` | 10:20 | „387" |
 
-Noch offen, weil Bildmaterial nötig: die Pogo-Physik-Animation (1:45, zwei
-Balken an einem gemeinsamen Regler) und die Vorher/Nachher-Gegenüberstellungen.
+`1-45_pogophysik` ist ein Diagramm, keine Aufnahme: ein Regler „Ladung", zwei
+Balken, die gemeinsam mitwandern (`Höhe = 9 + Ladung × 15`,
+`Weite = 3 + Ladung × 8`). Der Regler fährt zweimal hoch und wieder herunter,
+damit die Kopplung in beide Richtungen sichtbar wird — zwei feste Balken sagen
+genau das nicht. Läuft parallel zur Spielaufnahme des Sprungs, nicht als
+Vollbild. Der Anker „Ladung" stammt aus der Grafikbeschreibung im Skript, nicht
+aus einem gesprochenen Satz — kommt das Wort im Take nicht vor, meldet die
+Ankerauflösung das und die Grafik wird von Hand gesetzt.
+
+Noch offen, weil Bildmaterial nötig: nur die Vorher/Nachher-Gegenüberstellungen.
 
 ---
 

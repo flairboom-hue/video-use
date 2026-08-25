@@ -141,6 +141,7 @@ def health() -> dict:
         "llm": {"provider": llm.configured().name, "available": llm.available()},
         "caption_styles": cap.available_styles(),
         "graphic_kinds": gfx.available_kinds(),
+        "param_only_kinds": sorted(pipeline.PARAM_ONLY_KINDS),
         "graphic_themes": gfx.available_themes(),
         "motion_blur_levels": gfx.available_motion_blur(),
         "icons": gfx.available_icons(),
