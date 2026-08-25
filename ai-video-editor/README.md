@@ -105,6 +105,20 @@ hundred pixels and costs you seven times the render. It earns its keep on fast
 motion — a whip-in, a swipe, a spin. Default is off for that reason; turn it on
 per project when the movement is quick enough to strobe without it.
 
+## Checking the room before you record
+
+The rough cut rests on one assumption: that pauses are quieter than speech. In
+a room with a fan, traffic or a loud machine that stops being true, auto-editor
+finds no silence, and the cut removes nothing. Without a check you discover
+that after forty minutes of recording rather than after one.
+
+    python scripts/tontest.py probe.mp4
+
+Sixty seconds of talking with real pauses is enough. It reports the share of
+silence, the segment count and the longest gap, and says plainly whether the
+room works — it judges nothing about the microphone or the voice, only the one
+question the tool can actually answer.
+
 ## Before/after
 
 `engine/compare.py` builds a wipe: both states in the same screen position,

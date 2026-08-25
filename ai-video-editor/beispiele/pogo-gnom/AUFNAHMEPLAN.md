@@ -4,6 +4,10 @@ Abgeleitet aus den tatsächlichen Schwellwerten im Schnitt-Tool
 (`ai-video-editor/engine/rough_cut.py`), nicht aus allgemeinen Ratschlägen.
 Stand: 24. August 2026. Bezieht sich auf `YOUTUBE-SKRIPT.md` (11:00).
 
+Was hier steht: was das Werkzeug von der Aufnahme braucht, und welches Material
+für welche Stelle gebraucht wird. Wie du sprichst, wie du aufbaust und in
+welcher Reihenfolge du den Drehtag fährst, steht in **`DREHBUCH.md`**.
+
 ---
 
 ## Warum diese Regeln
