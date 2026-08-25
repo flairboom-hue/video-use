@@ -164,6 +164,40 @@ class TestMotionBlur:
         assert 145 < out[..., 3].mean() < 160
 
 
+class TestStatCardAndHorizontalBars:
+    def test_both_are_registered(self):
+        assert {"stat_card", "bar_chart_h"} <= set(available_kinds())
+
+    def test_empty_input_is_refused(self, tmp_path):
+        from engine.graphics import bar_chart_h, stat_card
+        with pytest.raises(Exception):
+            stat_card(tmp_path / "a.mov", [])
+        with pytest.raises(Exception):
+            bar_chart_h(tmp_path / "b.mov", [])
+
+    def test_a_panel_can_hug_its_content(self):
+        # A card that always fills the frame leaves a short graphic floating in
+        # empty space, which is what the first stat_card did.
+        from PIL import Image, ImageDraw
+
+        from engine.graphics import _panel
+        st = make_style("light_card", width=200, height=200)
+        full = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
+        _panel(ImageDraw.Draw(full), st)
+        band = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
+        _panel(ImageDraw.Draw(band), st, band=(80.0, 120.0))
+        assert band.getbbox()[3] - band.getbbox()[1] < full.getbbox()[3] - full.getbbox()[1]
+
+    def test_a_panel_less_theme_draws_no_card(self):
+        from PIL import Image, ImageDraw
+
+        from engine.graphics import _panel
+        st = make_style("dark_minimal", width=200, height=200)
+        img = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
+        _panel(ImageDraw.Draw(img), st)
+        assert img.getbbox() is None
+
+
 class TestEasing:
     def test_curves_are_anchored_at_both_ends(self):
         for fn in (ease_out_cubic, ease_in_out_cubic):

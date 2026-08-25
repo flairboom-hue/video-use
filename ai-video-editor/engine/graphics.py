@@ -149,7 +149,8 @@ def _shape_edge(st: "Style", alpha: int = 255) -> tuple:
     return edge, max(2, round(st.outline_width * 0.7))
 
 
-def _panel(draw: ImageDraw.ImageDraw, st: "Style", progress: float = 1.0) -> None:
+def _panel(draw: ImageDraw.ImageDraw, st: "Style", progress: float = 1.0,
+           band: tuple[float, float] | None = None) -> None:
     """The backing card, if the theme has one.
 
     This is what actually makes a light design usable over dark footage and a
@@ -160,8 +161,12 @@ def _panel(draw: ImageDraw.ImageDraw, st: "Style", progress: float = 1.0) -> Non
     inset_x = st.width * st.panel_inset
     inset_y = st.height * st.panel_inset * 0.72
     alpha = int(st.panel[3] * min(1.0, progress)) if len(st.panel) > 3 else 255
+    # A card that always fills the frame leaves a short graphic floating in
+    # empty space. `band` lets a generator hand over the vertical extent its
+    # content actually occupies.
+    top, bottom = band if band else (inset_y, st.content_height - inset_y * 0.4)
     draw.rounded_rectangle(
-        [inset_x, inset_y, st.width - inset_x, st.content_height - inset_y * 0.4],
+        [inset_x, top, st.width - inset_x, bottom],
         radius=int(st.height * st.panel_radius),
         fill=(*st.panel[:3], alpha))
 
@@ -719,6 +724,140 @@ def icon_row(out: Path, items: list[tuple[str, str]] | list[str],
     return _render(frame, dur, st, out)
 
 
+def stat_card(out: Path, items: list[tuple[str, str]], style: Style | None = None,
+              duration: float | None = None, columns: int = 0) -> Path:
+    """A row of figure + label pairs, revealed one at a time.
+
+    Not a chart: the values do not share a scale and are not meant to be
+    compared — "26 063 Zeilen" next to "36 Tage" next to "387 Commits". Drawing
+    those as bars would invite a comparison that means nothing, which is why
+    this exists as its own form.
+
+    `items` is [(value, label), ...]. Four across is the practical limit before
+    the figures stop being readable at a glance; more wraps to a second row.
+    """
+    st = style or Style()
+    if not items:
+        raise GraphicsError("stat_card needs at least one item")
+
+    pairs = [(str(v), str(l)) for v, l in items]
+    n = len(pairs)
+    cols = columns or (n if n <= 4 else (n + 1) // 2)
+    rows = (n + cols - 1) // cols
+
+    dur = duration or (0.22 * n + st.hold)
+    stagger = 0.2
+
+    value_font = st.font(int(st.height * (0.115 if cols <= 3 else 0.085)))
+    label_font = st.font(int(st.height * 0.028))
+
+    col_w = st.width * 0.86 / cols
+    left = st.width / 2 - col_w * (cols - 1) / 2
+
+    # Lay the block out from its real height rather than dividing the frame:
+    # the gap under a figure has to clear the glyphs, not a fraction of their
+    # bounding box, or the label lands on top of the number.
+    value_size = int(st.height * (0.115 if cols <= 3 else 0.085))
+    label_size = int(st.height * 0.028)
+    gap = value_size * 0.28
+    cell_h = value_size + gap + label_size
+    block_h = rows * cell_h + (rows - 1) * value_size * 0.5
+    block_top = st.content_center_y - block_h / 2
+    pad = st.height * 0.075
+
+    def frame(draw, t, img):
+        _panel(draw, st, band=(block_top - pad, block_top + block_h + pad))
+        elapsed = t * dur
+        for idx, (value, label) in enumerate(pairs):
+            p = ease_out_cubic(max(0.0, min(1.0, (elapsed - idx * stagger) / 0.45)))
+            if p <= 0:
+                break
+            alpha = int(255 * p)
+            r, c = divmod(idx, cols)
+            cx = left + c * col_w
+            top = block_top + r * (cell_h + value_size * 0.5) \
+                - (1 - p) * st.height * 0.015
+
+            vw, _ = _text_size(draw, value, value_font)
+            _write(draw, (cx - vw / 2, top), value, value_font,
+                   (*st.accent, alpha), st)
+            lw, _ = _text_size(draw, label.upper(), label_font)
+            _write(draw, (cx - lw / 2, top + value_size + gap), label.upper(),
+                   label_font, (*st.muted, alpha), st)
+
+    return _render(frame, dur, st, out)
+
+
+def bar_chart_h(out: Path, items: list[tuple[str, float]], style: Style | None = None,
+                duration: float | None = None, suffix: str = "",
+                decimals: int | None = None) -> Path:
+    """Horizontal bars with the label beside each one.
+
+    Vertical bars need short labels and few of them. Once there are ten
+    categories with names like "BLUMENBEET" the labels either overlap or turn
+    sideways, and a sideways label is a label nobody reads. Horizontal solves
+    both: the name sits on its own line, and adding a row costs height rather
+    than squeezing width.
+    """
+    st = style or Style()
+    if not items:
+        raise GraphicsError("bar_chart_h needs at least one item")
+
+    rows = [(str(k), float(v)) for k, v in items]
+    peak = max(v for _, v in rows) or 1.0
+    n = len(rows)
+
+    dur = duration or (st.reveal + 0.1 * n + st.hold)
+    stagger = min(0.14, 1.2 / n)
+
+    label_font = st.font(int(st.height * min(0.036, 0.52 / n)))
+    value_font = st.font(int(st.height * min(0.036, 0.52 / n)))
+
+    top = st.content_height * 0.10
+    usable = st.content_height * 0.80
+    row_h = usable / n
+    bar_h = row_h * 0.62
+
+    label_w = st.width * 0.22
+    track_x = st.width * 0.26
+    track_w = st.width * 0.56
+
+    def frame(draw, t, img):
+        _panel(draw, st)
+        elapsed = t * dur
+        for i, (label, value) in enumerate(rows):
+            p = ease_out_cubic(max(0.0, min(1.0, (elapsed - i * stagger) / st.reveal)))
+            if p <= 0:
+                break
+            alpha = int(255 * p)
+            y = top + i * row_h + (row_h - bar_h) / 2
+            # First row leads in the accent; the rest step back so the eye
+            # starts where the point is.
+            colour = st.accent if i == 0 else st.accent_2
+
+            lw, lh = _text_size(draw, label.upper(), label_font)
+            _write(draw, (track_x - lw - st.width * 0.02, y + (bar_h - lh) / 2),
+                   label.upper(), label_font, (*st.text, alpha), st)
+
+            width = track_w * (value / peak) * p
+            edge, ew = _shape_edge(st, alpha)
+            if width > 1:
+                draw.rounded_rectangle([track_x, y, track_x + width, y + bar_h],
+                                       radius=int(bar_h * 0.28),
+                                       fill=(*colour, alpha), outline=edge, width=ew)
+
+            # Per row, not per chart: "52 %" alongside "12,4 %" reads better
+            # than forcing every whole number to carry a pointless ",0".
+            dp = decimals if decimals is not None else (0 if float(value).is_integer() else 1)
+            shown = (f"{value * p:,.{dp}f}"
+                     .replace(",", "X").replace(".", ",").replace("X", ".")) + suffix
+            vw, vh = _text_size(draw, shown, value_font)
+            _write(draw, (track_x + width + st.width * 0.012, y + (bar_h - vh) / 2),
+                   shown, value_font, (*st.muted, alpha), st)
+
+    return _render(frame, dur, st, out)
+
+
 THEMES: dict[str, dict] = {
     # The original: assumes dark or busy footage, no plate.
     "dark_minimal": {
@@ -785,6 +924,8 @@ GENERATORS = {
     "text_animation": text_animation,
     "pie_chart": pie_chart,
     "icon_row": icon_row,
+    "stat_card": stat_card,
+    "bar_chart_h": bar_chart_h,
 }
 
 
