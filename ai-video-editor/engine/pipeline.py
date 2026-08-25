@@ -13,13 +13,13 @@ Two design rules run through this module:
 
 from __future__ import annotations
 
-import shutil
-import traceback
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 from . import captions as cap
+from . import compare as cmp_
 from . import graphics as gfx
 from . import media, render, rough_cut, scenes as scene_mod, suggestions as sug
 from . import transcribe as tr
@@ -273,6 +273,79 @@ def build_graphic(project: Project, suggestion_id: str, kind: str = "",
     project.remove_overlay(suggestion_id)      # replacing, not stacking
     project.add_overlay(overlay)
     project.update_suggestion(suggestion_id, status="accepted", graphic_kind=kind)
+    return overlay
+
+
+def _slug(text: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return cleaned or "vergleich"
+
+
+def check_comparison_placement(project: Project, anchor_word: str,
+                               start_in_output: float | None) -> None:
+    """Can this comparison actually be placed? Raises ValueError if not.
+
+    Separate from the render so the caller can refuse in the response rather
+    than queue a job that spends thirty seconds encoding a clip the renderer
+    will then drop without a word.
+    """
+    anchor_word = (anchor_word or "").strip()
+    if not anchor_word and start_in_output is None:
+        raise ValueError("a comparison needs an anchor word or start_in_output")
+    if not anchor_word or start_in_output is not None:
+        return
+    stem = Path(project.data["source"]).stem
+    if not (project.root / "transcripts" / f"{stem}.json").exists():
+        raise ValueError(
+            f"no transcript for this project, so '{anchor_word}' cannot be "
+            "located. Install WhisperX and re-analyse, or pass start_in_output "
+            "in seconds.")
+
+
+def build_comparison(project: Project, before: Path, after: Path,
+                     anchor_word: str = "", label_before: str = "vorher",
+                     label_after: str = "nachher", name: str = "",
+                     spec: cmp_.CompareSpec | None = None,
+                     anchor_occurrence: int = 1,
+                     start_in_output: float | None = None) -> Overlay:
+    """Render a before/after wipe and place it on the timeline.
+
+    Full-frame rather than a corner graphic, so it goes in as an overlay: the
+    cut itself is a lossless concat of the source, and splicing foreign media
+    into that would force a re-encode of the whole timeline.
+
+    An anchor word is the better placement — it survives a re-cut — but it
+    needs a transcript to resolve against. Without one the caller has to say
+    where in the output the comparison goes, in seconds; the alternative is
+    building a clip that the renderer then drops without saying so.
+    """
+    before, after = Path(before), Path(after)
+    anchor_word = anchor_word.strip()
+    check_comparison_placement(project, anchor_word, start_in_output)
+
+    info = project.data.get("media", {})
+    theme = project.data["settings"].get("graphic_theme", "light_card")
+    style = gfx.make_style(
+        theme,
+        width=int(info.get("width") or 1920),
+        height=int(info.get("height") or 1080),
+        fps=int(round(float(info.get("fps") or 30))),
+        # The wipe fills the frame, so there is no band to keep clear; the
+        # labels sit at the top, away from where captions land.
+        reserve_caption_band=False)
+
+    slug = _slug(name or anchor_word)
+    out = project.root / "graphics" / f"compare_{slug}.mov"
+    cmp_.build_comparison(before, after, out, label_before, label_after,
+                          style, spec)
+
+    overlay = Overlay(file=str(out), duration=(spec or cmp_.CompareSpec()).duration,
+                      anchor_word=anchor_word,
+                      anchor_occurrence=anchor_occurrence,
+                      start_in_output=start_in_output,
+                      suggestion_id=f"compare:{slug}")
+    project.remove_overlay(overlay.suggestion_id)   # replacing, not stacking
+    project.add_overlay(overlay)
     return overlay
 
 

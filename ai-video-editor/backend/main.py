@@ -22,8 +22,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from engine import captions as cap                     # noqa: E402
+from engine import compare as cmp_                     # noqa: E402
 from engine import graphics as gfx                     # noqa: E402
-from engine import llm, pipeline, qc                   # noqa: E402
+from engine import llm, media, pipeline, qc            # noqa: E402
 from engine import suggestions as sug                  # noqa: E402
 from engine.capabilities import detect, quality_profile  # noqa: E402
 from engine.project import Project                     # noqa: E402
@@ -216,6 +217,83 @@ def accept(pid: str, sid: str, body: dict | None = None) -> dict:
         return {"overlay": overlay.__dict__}
 
     return {"job": jobs.submit("graphic", work, pid).to_dict()}
+
+
+# -- before/after comparisons ----------------------------------------------
+
+MEDIA_EXTS = cmp_.IMAGE_EXTS | media.VIDEO_EXTS
+
+
+def _asset_path(name: str) -> Path:
+    """Resolve a client-supplied asset name inside ASSETS, and nowhere else.
+
+    The app is local and single-user, which is a reason to keep the check
+    simple, not a reason to skip it: an unchecked path here reads any file on
+    the machine into a rendered video.
+    """
+    candidate = (ASSETS / name).resolve()
+    root = ASSETS.resolve()
+    if root != candidate and root not in candidate.parents:
+        raise HTTPException(400, f"{name} is outside ASSETS/")
+    if not candidate.exists():
+        raise HTTPException(404, f"{name} not found under ASSETS/")
+    return candidate
+
+
+@app.get("/api/assets")
+def list_assets() -> dict:
+    """Everything under ASSETS/ that a comparison could use.
+
+    Listed rather than typed: a path the user has to spell correctly is a
+    path they get wrong, and the failure surfaces only after a render.
+    """
+    files = []
+    for path in sorted(ASSETS.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in MEDIA_EXTS:
+            continue
+        files.append({
+            "name": str(path.relative_to(ASSETS)),
+            "kind": "image" if cmp_.is_image(path) else "video",
+            "size_bytes": path.stat().st_size,
+        })
+    return {"assets": files, "root": str(ASSETS)}
+
+
+@app.post("/api/projects/{pid}/comparisons")
+def build_comparison(pid: str, body: dict) -> dict:
+    """Render a vorher/nachher wipe and anchor it to a spoken word."""
+    project = load_project(pid)
+    before = _asset_path(str(body.get("before", "")))
+    after = _asset_path(str(body.get("after", "")))
+    anchor = str(body.get("anchor_word", "")).strip()
+    start = body.get("start_in_output")
+    start = None if start in (None, "") else float(start)
+
+    spec = cmp_.CompareSpec(
+        hold_before=float(body.get("hold_before", 0.8)),
+        sweep=float(body.get("sweep", 1.6)),
+        hold_after=float(body.get("hold_after", 1.4)))
+
+    # Fail before the job is queued: the caller gets the reason in the response
+    # instead of having to go looking for a failed job.
+    try:
+        pipeline.check_comparison_placement(project, anchor, start)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    def work(job):
+        jobs.note(job, "comparison", "running", anchor or f"{start:.1f}s")
+        overlay = pipeline.build_comparison(
+            project, before, after, anchor,
+            str(body.get("label_before", "vorher")),
+            str(body.get("label_after", "nachher")),
+            str(body.get("name", "")), spec,
+            int(body.get("anchor_occurrence", 1)), start)
+        project.snapshot(f"comparison on '{anchor}'")
+        broadcast({"type": "project_updated", "project": project.summary()})
+        return {"overlay": overlay.__dict__}
+
+    return {"job": jobs.submit("comparison", work, pid).to_dict()}
 
 
 @app.post("/api/projects/{pid}/suggestions/bulk")

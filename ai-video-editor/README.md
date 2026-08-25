@@ -32,6 +32,7 @@ fixes it, and the pipeline continues with what it can still do.
 | Scenes | PySceneDetect shot boundaries |
 | Transcript | WhisperX, word-level timestamps, SRT + VTT export |
 | Suggestions | Numbers, comparisons, lists, timelines, places → anchored proposals with a reason |
+| Comparisons | Before/after wipes from two stills or two clips, anchored to a spoken word |
 | Graphics | 10 animated types (number, vertical and horizontal bars, pie/donut, comparison, stat card, icon row, linked meters, lower third, kinetic type) in 4 themes, rendered with alpha, eased, caption-safe |
 | Captions | 4 styles incl. per-word karaoke highlighting, correct output-timeline offsets |
 | Render | Segment extract → lossless concat → overlays (PTS-shifted) → captions last → −14 LUFS |
@@ -103,6 +104,34 @@ and eased, so on a number counting up or a bar growing, blur changes a few
 hundred pixels and costs you seven times the render. It earns its keep on fast
 motion — a whip-in, a swipe, a spin. Default is off for that reason; turn it on
 per project when the movement is quick enough to strobe without it.
+
+## Before/after
+
+`engine/compare.py` builds a wipe: both states in the same screen position,
+with a divider travelling across. Side by side is the obvious layout and the
+weak one — the eye has to travel between two frames and hold the first in
+memory, so a texture that is slightly too bright or a shadow that is missing
+simply does not register. A wipe puts the difference where the viewer is
+already looking.
+
+Either side may be a still or a clip, because most "before" states only exist
+as a screenshot somebody happened to take. Each side is read through its own
+hold and the shared sweep; the seam position is one expression, shared by the
+wipe and the divider, so the line cannot drift off the seam.
+
+Placement follows the same rule as graphics: anchored to a spoken word, so it
+survives a re-cut. Without a transcript there is nothing to anchor against, and
+the API says so and asks for a timestamp instead rather than rendering a clip
+the renderer would then drop in silence.
+
+    POST /api/projects/{id}/comparisons
+    {"before": "broll/berge_vorher.png", "after": "broll/berge_nachher.png",
+     "anchor_word": "Berge"}
+
+Paths are resolved inside `ASSETS/` and nowhere else. `GET /api/assets` lists
+what is there, and the toolbar's *Vorher/Nachher* button picks from that list —
+a path the user has to spell correctly is a path they get wrong, and the
+mistake would only surface after a render.
 
 ## Long-form or shorts?
 

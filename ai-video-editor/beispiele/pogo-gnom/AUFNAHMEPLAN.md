@@ -140,7 +140,28 @@ Vollbild. Der Anker „Ladung" stammt aus der Grafikbeschreibung im Skript, nich
 aus einem gesprochenen Satz — kommt das Wort im Take nicht vor, meldet die
 Ankerauflösung das und die Grafik wird von Hand gesetzt.
 
-Noch offen, weil Bildmaterial nötig: nur die Vorher/Nachher-Gegenüberstellungen.
+### Die Gegenüberstellungen
+
+`vergleiche.py` baut die Vorher/Nachher-Wischblenden für die Fehler zwischen
+2:45 und 5:00. Die fünf, die dieser Plan benennt, sind Zustände und keine
+Vorgänge — je zwei Screenshots reichen, Videomaterial braucht es nicht:
+
+| Kürzel | Dateien in `ASSETS/broll/` |
+|---|---|
+| `berge` | `berge_vorher.png`, `berge_nachher.png` |
+| `fluss` | `fluss_vorher.png`, `fluss_nachher.png` |
+| `texturen` | `texturen_vorher.png`, `texturen_nachher.png` |
+| `brett` | `brett_vorher.png`, `brett_nachher.png` |
+| `pilzhut` | `pilzhut_vorher.png`, `pilzhut_nachher.png` |
+
+    python beispiele/pogo-gnom/vergleiche.py vergleiche
+
+Das Skript baut, was da ist, und listet auf, was fehlt. Die Ankerwörter darin
+sind aus den Fehlerbezeichnungen abgeleitet, nicht aus gesprochenem Text — nach
+der Aufnahme gegen das Transkript prüfen.
+
+Zwei der sieben Fehler benennt dieser Plan nicht. Die stehen bewusst auch nicht
+im Skript: eine sichtbare Lücke ist besser als ein erfundener Eintrag.
 
 ---
 

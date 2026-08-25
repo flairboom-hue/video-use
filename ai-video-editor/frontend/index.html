@@ -138,6 +138,7 @@ select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);b
       <select id="capstyle"></select>
       <select id="theme" title="Grafik-Design"></select>
       <select id="mblur" title="Motion Blur — kostet Renderzeit"></select>
+      <button id="bCompare" title="Vorher/Nachher aus zwei Dateien in ASSETS/">Vorher/Nachher</button>
       <button id="prev">Vorschau rendern</button>
       <button class="primary" id="exp">Exportieren</button>
       <span class="sp" style="flex:1"></span>
@@ -331,6 +332,43 @@ $("#bAllGfx").onclick = () => bulk({action:"accept", kind:"graphic"}, "Alle Graf
 $("#bHigh").onclick   = () => bulk({action:"accept", min_confidence:0.75}, "Sichere Vorschläge");
 $("#bNone").onclick   = () => { if (confirm("Alle offenen Vorschläge ablehnen?"))
                                   bulk({action:"reject"}, "Alle abgelehnt"); };
+$("#bCompare").onclick = async () => {
+  const { assets } = await api("/api/assets");
+  if (!assets.length) {
+    toast("Keine Dateien in ASSETS/ — Screenshots oder Clips dort ablegen");
+    return;
+  }
+  // Numbered picks rather than typed paths: a path the user has to spell is a
+  // path they get wrong, and that only surfaces after a render.
+  const menu = assets.map((a, i) => `${i + 1}. ${a.name} (${a.kind})`).join("\n");
+  const pick = what => {
+    const raw = prompt(`${what}:\n\n${menu}`, "");
+    if (raw === null) return null;
+    const n = parseInt(raw, 10);
+    return assets[n - 1] ? assets[n - 1].name : (toast(`"${raw}" ist keine Nummer aus der Liste`), undefined);
+  };
+  const before = pick("Nummer für VORHER");
+  if (!before) return;
+  const after = pick("Nummer für NACHHER");
+  if (!after) return;
+  // A word anchor survives a re-cut; a timestamp does not. Without a
+  // transcript there is nothing to anchor against, so ask for the second.
+  const body = {before, after};
+  const stage = (P.stages || {}).transcript || {};
+  if (stage.status !== "done") {
+    const at = prompt("Kein Transkript — an welcher Sekunde der Ausgabe soll die Gegenüberstellung liegen?", "");
+    if (!at) return;
+    body.start_in_output = parseFloat(at.replace(",", "."));
+  } else {
+    const anchor = prompt("Auf welchem gesprochenen Wort soll die Gegenüberstellung liegen?", "");
+    if (!anchor) return;
+    body.anchor_word = anchor;
+  }
+  await api(`/api/projects/${P.id}/comparisons`,
+            {method:"POST", body:JSON.stringify(body)});
+  toast("Vergleich wird gerendert…");
+};
+
 window.change = id => {
   // Kinds that need explicit parameters are listed but not offered here: the
   // picker has no way to ask for a formula, so choosing one could only fail.
