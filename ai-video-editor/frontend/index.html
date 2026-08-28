@@ -137,6 +137,7 @@ select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);b
       <select id="aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:5</option></select>
       <select id="capstyle"></select>
       <select id="theme" title="Grafik-Design"></select>
+      <select id="place" title="Wo die Grafik sitzt — „top“ lässt das Gesicht frei"></select>
       <select id="mblur" title="Motion Blur — kostet Renderzeit"></select>
       <button id="bCompare" title="Vorher/Nachher aus zwei Dateien in ASSETS/">Vorher/Nachher</button>
       <button id="prev">Vorschau rendern</button>
@@ -205,6 +206,12 @@ async function health() {
     .map(l=>`<option value="${l}">${blurLabels[l]||l}</option>`).join("");
   $("#theme").innerHTML = (HEALTH.graphic_themes||[])
     .map(t=>`<option value="${t}">${themeLabels[t]||t}</option>`).join("");
+  // "Mitte" is the strongest place for a card over gameplay and the worst one
+  // over a talking head, because the card is a full-width plate.
+  const placeLabels = {center:"Grafik: Mitte", top:"Grafik: oben (Gesicht frei)",
+                       bottom:"Grafik: unten"};
+  $("#place").innerHTML = (HEALTH.graphic_placements||[])
+    .map(t=>`<option value="${t}">${placeLabels[t]||t}</option>`).join("");
 }
 
 /* ---------------- websocket ---------------- */
@@ -420,6 +427,12 @@ $("#theme").onchange = async e => {
   await api(`/api/projects/${P.id}/settings`, {method:"POST",
     body:JSON.stringify({graphic_theme:e.target.value})});
   toast("Design: " + e.target.options[e.target.selectedIndex].text
+        + " — angenommene Grafiken neu rendern");
+};
+$("#place").onchange = async e => {
+  await api(`/api/projects/${P.id}/settings`, {method:"POST",
+    body:JSON.stringify({graphic_placement:e.target.value})});
+  toast(e.target.options[e.target.selectedIndex].text
         + " — angenommene Grafiken neu rendern");
 };
 $("#mblur").onchange = async e => {

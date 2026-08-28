@@ -95,6 +95,10 @@ class Project:
                 "language": "de",
                 "caption_style": "bold_center",
                 "graphic_theme": "light_card",
+                # Centred by default: over gameplay a card in the middle is
+                # the strongest place for it. Set to "top" for the blocks
+                # where the speaker is on screen underneath.
+                "graphic_placement": "center",
                 "motion_blur": "off",
                 "aspect": "16:9",
                 "remove_fillers": True,

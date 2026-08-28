@@ -41,6 +41,7 @@ def ease_in_out_cubic(t: float) -> float:
 # Graphics must stay above it — a chart with a subtitle across its middle is
 # the most common failure of automated overlay placement.
 CAPTION_SAFE_BOTTOM = 0.26   # fraction of frame height reserved for captions
+PLACEMENTS = ("center", "top", "bottom")
 
 
 @dataclass
@@ -73,6 +74,41 @@ class Style:
     shutter: float = 0.5            # fraction of the frame interval the shutter is open
 
     reserve_caption_band: bool = True
+
+    # Where in the frame the graphic sits. A card is a full-width plate over
+    # the middle, which is exactly where a head is in a talking-head shot —
+    # "top" and "bottom" re-lay the graphic into a band so both fit.
+    placement: str = "center"
+    placement_fraction: float = 0.42   # share of the frame the band may use
+
+    # Filled in by __post_init__ for a placed graphic: the generators lay out
+    # inside `height` (the band) and the frame is composited into a canvas of
+    # `canvas_height` at `canvas_offset_y`. Zero means "no band", i.e. centred.
+    canvas_height: int = 0
+    canvas_offset_y: int = 0
+
+    def __post_init__(self) -> None:
+        if self.placement == "center":
+            return
+        if self.placement not in PLACEMENTS:
+            raise GraphicsError(
+                f"unknown placement '{self.placement}'. Available: "
+                f"{sorted(PLACEMENTS)}")
+        full = int(self.height)
+        band = max(1, round(full * self.placement_fraction))
+        if self.placement == "top":
+            offset = 0
+        else:
+            # Above the caption band, not behind it: a card in the lower third
+            # would otherwise be crossed by every subtitle.
+            floor = full * (1 - CAPTION_SAFE_BOTTOM) if self.reserve_caption_band else full
+            offset = max(0, round(floor - band))
+        self.canvas_height = full
+        self.canvas_offset_y = offset
+        self.height = band
+        # The band has already been placed clear of the captions; reserving
+        # again inside it would shrink the graphic a second time.
+        self.reserve_caption_band = False
 
     @property
     def content_height(self) -> float:
@@ -223,7 +259,15 @@ def _hash_unit(n: int) -> float:
 def _compose_frame(draw_frame, t: float, style: Style) -> Image.Image:
     img = Image.new("RGBA", (style.width, style.height), (0, 0, 0, 0))
     draw_frame(ImageDraw.Draw(img), t, img)
-    return img
+    if not style.canvas_height or style.canvas_height == style.height:
+        return img
+    # The generator laid itself out inside the band; put the band where it
+    # belongs. Composited rather than scaled: scaling a finished frame to a
+    # third of its height would soften every glyph, and a graphic that is
+    # slightly blurry reads as a mistake.
+    canvas = Image.new("RGBA", (style.width, style.canvas_height), (0, 0, 0, 0))
+    canvas.alpha_composite(img, (0, int(style.canvas_offset_y)))
+    return canvas
 
 
 def _average_rgba(samples: list[Image.Image]) -> Image.Image:
@@ -1051,6 +1095,12 @@ GENERATORS = {
     "bar_chart_h": bar_chart_h,
     "linked_meters": linked_meters,
 }
+
+
+def available_placements() -> list[str]:
+    """Where a graphic may sit. Not cosmetic: a centred full-width card lands
+    on the speaker's face, so this is what makes "face plus card" possible."""
+    return list(PLACEMENTS)
 
 
 def available_kinds() -> list[str]:

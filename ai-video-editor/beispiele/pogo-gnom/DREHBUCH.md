@@ -112,13 +112,18 @@ nicht die Aufnahme. Beim Drehen gilt schlicht: Kamera läuft, jeder Block wird
 als Facecam aufgenommen. Beim Schnitt liegt dann Gameplay oder eine Grafik
 darüber, wo das Skript es so vorsieht.
 
-Ein Punkt dazu, den du wissen solltest, bevor du es im Schnitt suchst: die
-Grafikkarten sind **Vollbreite-Platten**, von 6 % bis 94 % der Bildbreite. Sie
-verdecken, was darunter liegt. Und Einblendungen liegen immer im vollen Bild —
-ein **kleines** Facecam-Fenster neben einer großen Gegenüberstellung (so will es
-der Schnittplan bei 2:45–5:00) kann das Werkzeug nicht. Diese Stelle wird also
-entweder ein harter Wechsel zwischen Gesicht und Vergleich, oder du baust das
-Bild-in-Bild von Hand.
+Ein Punkt dazu, den du beim Drehen wissen solltest: die Grafikkarten sind
+**Vollbreite-Platten**, von 6 % bis 94 % der Bildbreite. Mittig liegen sie
+also auf dem Gesicht. Wo beides gleichzeitig gebraucht wird — bei 0:08 und
+10:20 — steht die Karte deshalb oben (`placement="top"`), mit eigenem,
+kleinerem Layout. Für dich beim Drehen heißt das nur: **Kopf nicht zu weit
+oben im Bild**, sonst wird es dort eng.
+
+Was das Werkzeug weiterhin nicht kann: ein **kleines** Facecam-Fenster neben
+einer großen Gegenüberstellung, wie es der Schnittplan bei 2:45–5:00 vorsieht.
+Einblendungen liegen dort im vollen Bild. Diese Stelle wird also ein harter
+Wechsel zwischen Gesicht und Vergleich, oder du baust das Bild-in-Bild von
+Hand.
 
 **Untere 26 % des Bildes freihalten.** Da liegen die Untertitel. Kinn oberhalb
 dieser Linie, und nichts Wichtiges darunter.

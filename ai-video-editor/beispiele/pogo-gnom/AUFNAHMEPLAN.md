@@ -153,11 +153,12 @@ markiert.
 
     python beispiele/pogo-gnom/storyboard.py storyboard
 
-Zwei Stellen fallen dabei auf und sind im Bild rot markiert: bei **0:08** und
-**10:20** will der Schnittplan Facecam und Zahlenkarte gleichzeitig. Die Karten
-sind Vollbreite-Platten und liegen mittig — also genau dort, wo der Kopf ist.
-An diesen zwei Stellen muss während der Karte auf Spielaufnahme geschnitten
-werden, oder die Karte wird von Hand kleiner gesetzt.
+Bei **0:08** und **10:20** will der Schnittplan Facecam und Zahlenkarte
+gleichzeitig. Eine mittig liegende Karte ist eine Vollbreite-Platte und landet
+dort auf dem Gesicht. Diese beiden Karten werden deshalb oben platziert
+(`placement="top"`) — die Karte bekommt ein eigenes, kleineres Layout im
+oberen Band, das Gesicht bleibt frei. Im Storyboard steht das an den beiden
+Bildern.
 
 ---
 

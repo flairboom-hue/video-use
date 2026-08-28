@@ -105,6 +105,28 @@ hundred pixels and costs you seven times the render. It earns its keep on fast
 motion — a whip-in, a swipe, a spin. Default is off for that reason; turn it on
 per project when the movement is quick enough to strobe without it.
 
+## Where a graphic sits
+
+A card is a full-width plate — 6% to 94% of the frame — over the vertical
+middle. Over gameplay that is the strongest place for it. Over a talking head
+it lands on the face, and no amount of reframing helps, because the plate is
+wider than the shot.
+
+`placement` re-lays the graphic into a band instead of moving it:
+
+| | |
+|---|---|
+| `center` *(default)* | the whole frame, as before |
+| `top` | a band at the top — the speaker stays visible underneath |
+| `bottom` | a band above the caption zone, never behind it |
+
+The band gets its own layout rather than a scaled copy of the centred one:
+scaling a finished frame down to a third of its height softens every glyph,
+and a slightly blurry graphic reads as a mistake. Type in a band is smaller
+because it was laid out smaller.
+
+Per project in the toolbar, or per graphic via `params.placement` on accept.
+
 ## Checking the room before you record
 
 The rough cut rests on one assumption: that pauses are quieter than speech. In

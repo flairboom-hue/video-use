@@ -206,9 +206,14 @@ def build_graphic(project: Project, suggestion_id: str, kind: str = "",
     theme = project.data["settings"].get("graphic_theme", "light_card")
     blur = gfx.MOTION_BLUR_LEVELS.get(
         str(project.data["settings"].get("motion_blur", "off")), 0)
+    # Per-graphic, falling back to the project default: whether a card may sit
+    # centred depends on what is under it in that shot, not on the project.
+    placement = str(params.get("placement")
+                    or project.data["settings"].get("graphic_placement", "center"))
     style = gfx.make_style(
         theme,
         motion_blur=blur,
+        placement=placement,
         width=int(info.get("width") or 1920),
         height=int(info.get("height") or 1080),
         fps=int(round(float(info.get("fps") or 30))),
@@ -331,7 +336,8 @@ def build_comparison(project: Project, before: Path, after: Path,
         height=int(info.get("height") or 1080),
         fps=int(round(float(info.get("fps") or 30))),
         # The wipe fills the frame, so there is no band to keep clear; the
-        # labels sit at the top, away from where captions land.
+        # labels sit at the top, away from where captions land. Placement is
+        # not offered either — a comparison IS the frame.
         reserve_caption_band=False)
 
     slug = _slug(name or anchor_word)

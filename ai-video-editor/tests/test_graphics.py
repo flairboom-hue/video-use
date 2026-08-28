@@ -390,3 +390,85 @@ class TestLinkedMeters:
         high = reach(1.0)
         # The whole point of the graphic: one input, both readouts follow.
         assert high[0] > low[0] and high[1] > low[1]
+
+
+class TestPlacement:
+    """Where a card sits.
+
+    Not cosmetic. A card is a full-width plate over the middle of the frame,
+    which is exactly where a head is in a talking-head shot, so "centred" and
+    "speaker on screen" cannot both be true.
+    """
+
+    @staticmethod
+    def _bbox(placement, **kw):
+        from PIL import Image
+
+        from engine.graphics import _compose_frame, stat_card
+        st = make_style("light_card", width=800, height=600, placement=placement, **kw)
+        captured = {}
+
+        def fake_render(frame, dur, s, out):
+            captured["frame"] = frame
+            return out
+
+        from engine import graphics as g
+        real, g._render = g._render, fake_render
+        try:
+            stat_card(__import__("pathlib").Path("x.mov"),
+                      [("36", "Tage"), ("387", "Commits")], st)
+        finally:
+            g._render = real
+        img = _compose_frame(captured["frame"], 1.0, st)
+        assert img.size == (800, 600), "the frame is not the full canvas"
+        return img.getbbox()
+
+    def test_centred_is_exactly_what_it_was(self):
+        st = make_style("light_card", width=800, height=600)
+        assert st.height == 600 and st.canvas_height == 0
+        assert st.reserve_caption_band is True
+
+    def test_top_lays_the_graphic_out_in_a_band_at_the_top(self):
+        st = make_style("light_card", width=800, height=600, placement="top")
+        assert st.height < 600, "the graphic still uses the whole frame"
+        assert st.canvas_height == 600 and st.canvas_offset_y == 0
+        top, bottom = self._bbox("top")[1], self._bbox("top")[3]
+        assert bottom < 600 * 0.45, "the card reaches into the middle of the frame"
+        assert top < 600 * 0.2
+
+    def test_bottom_stays_above_the_caption_band(self):
+        # A card in the lower third with captions on would be crossed by every
+        # subtitle, which is the failure the caption band exists to prevent.
+        from engine.graphics import CAPTION_SAFE_BOTTOM
+        bottom = self._bbox("bottom", reserve_caption_band=True)[3]
+        assert bottom <= 600 * (1 - CAPTION_SAFE_BOTTOM) + 2
+
+    def test_without_captions_the_bottom_band_may_reach_the_edge(self):
+        with_caps = self._bbox("bottom", reserve_caption_band=True)[3]
+        without = self._bbox("bottom", reserve_caption_band=False)[3]
+        assert without > with_caps
+
+    def test_the_band_is_not_reserved_twice(self):
+        # The band is already placed clear of the captions; reserving again
+        # inside it would shrink the graphic a second time for no reason.
+        st = make_style("light_card", width=800, height=600, placement="top")
+        assert st.reserve_caption_band is False
+        assert st.content_height == st.height
+
+    def test_an_unknown_placement_raises_rather_than_centring(self):
+        from engine.graphics import GraphicsError
+        with pytest.raises(GraphicsError):
+            make_style("light_card", placement="oben")
+
+    def test_only_implemented_placements_are_offered(self):
+        from engine.graphics import PLACEMENTS, available_placements
+        assert set(available_placements()) == set(PLACEMENTS)
+
+    def test_the_type_is_relaid_rather_than_scaled_down(self):
+        # Scaling a finished frame into a third of the height would soften
+        # every glyph. The band gets its own, smaller layout instead.
+        centred = make_style("light_card", width=800, height=600)
+        placed = make_style("light_card", width=800, height=600, placement="top")
+        assert placed.width == centred.width, "the card should stay full width"
+        assert placed.font(int(placed.height * 0.1)).size < \
+            centred.font(int(centred.height * 0.1)).size

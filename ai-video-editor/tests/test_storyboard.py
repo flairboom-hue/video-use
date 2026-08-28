@@ -73,10 +73,10 @@ class TestBlocks:
             assert zeit and name and notiz and callable(fn)
             assert isinstance(konflikt, str)
 
-    def test_the_face_and_card_collisions_are_marked(self):
-        # A card is a full-width plate over the middle of the frame, which is
-        # where a head is. The two blocks where the plan asks for both must
-        # say so rather than look fine in the storyboard and fail in the edit.
+    def test_the_blocks_that_share_the_frame_with_a_face_say_so(self):
+        # A centred card is a full-width plate over the middle of the frame,
+        # which is where a head is. These two blocks put the card in the top
+        # band instead, and the storyboard says which ones they are.
         st = gfx.make_style("light_card")
         marked = {z for z, _, _, _, k in storyboard.panels(st) if k}
         assert marked == {"0:08", "10:20"}

@@ -199,16 +199,22 @@ def vergleich_frame(st, links="vorher", rechts="nachher") -> Image.Image:
 
 # ---------------------------------------------------------------- Blöcke ---
 
-KARTE_UEBER_GESICHT = "Karte verdeckt das Gesicht — auf Spielbild schneiden"
+KARTE_OBEN = "Karte oben platziert — Gesicht bleibt frei"
 
 
 def panels(st: gfx.Style) -> list[tuple[str, str, str, callable, str]]:
     """(Zeit, Blockname, Notiz, Zeichenfunktion, Konflikt) wie im Video.
 
-    Der Konflikt ist kein Schmuck: die Grafikkarten sind Vollbreite-Platten
-    und liegen mittig, also genau dort, wo in einer Talking-Head-Einstellung
-    der Kopf ist. Das sieht man erst, wenn man es zeichnet.
+    Das fünfte Feld ist ein Hinweis, kein Schmuck. Eine Grafikkarte ist eine
+    Vollbreite-Platte und liegt normalerweise mittig — also genau dort, wo in
+    einer Talking-Head-Einstellung der Kopf ist. Wo beides zusammenkommt, wird
+    die Karte oben platziert (`placement="top"`), und das steht am Bild.
     """
+
+    # Für die Blöcke, in denen das Gesicht mit im Bild ist: dieselbe Karte,
+    # aber im oberen Band statt in der Mitte.
+    oben = gfx.make_style(THEME, width=W, height=H, fps=st.fps,
+                          reserve_caption_band=True, placement="top")
 
     def hook(img):
         d, n = spielaufnahme(img, "SPIELAUFNAHME · Sturz", gnom_at=(0.44, 0.30))
@@ -219,7 +225,7 @@ def panels(st: gfx.Style) -> list[tuple[str, str, str, callable, str]]:
         img.alpha_composite(grafik_frame(
             gfx.stat_card,
             [("26 063", "Zeilen"), ("1", "Datei"), ("36", "Tage"), ("387", "Commits")],
-            st))
+            oben))
         return d, n
 
     def kapitel(img):
@@ -283,7 +289,7 @@ def panels(st: gfx.Style) -> list[tuple[str, str, str, callable, str]]:
         img.alpha_composite(grafik_frame(
             gfx.stat_card,
             [("36", "Tage"), ("387", "Commits"),
-             ("26 063", "Zeilen"), ("9", "Fehler zuletzt")], st))
+             ("26 063", "Zeilen"), ("9", "Fehler zuletzt")], oben))
         return d, n
 
     def abschluss(img):
@@ -295,8 +301,8 @@ def panels(st: gfx.Style) -> list[tuple[str, str, str, callable, str]]:
 
     return [
         ("0:00", "Hook", "Kein Logo, kein Intro.", hook, ""),
-        ("0:08", "Prämisse + KI-Frage", "Skript will Facecam und Karte gleichzeitig.",
-         praemisse, KARTE_UEBER_GESICHT),
+        ("0:08", "Prämisse + KI-Frage", "Facecam und Karte gleichzeitig.",
+         praemisse, KARTE_OBEN),
         ("0:45", "Kapitel „7 Fehler”", "Kurzer Übergang über dem Spielbild.", kapitel, ""),
         ("0:50", "Was das Spiel ist", "Erklären ohne Gesicht.", spiel, ""),
         ("1:20", "Drei Bescheide", "Drei nacheinander, rhythmisch.", bescheide, ""),
@@ -307,7 +313,7 @@ def panels(st: gfx.Style) -> list[tuple[str, str, str, callable, str]]:
         ("7:30", "Das Geständnis", "Groß, ruhig, unmontiert.", gestaendnis, ""),
         ("9:00", "Steam-Kapitel", "Bildschirmlastig.", steam, ""),
         ("10:20", "Bilanz", "Zurückblickend, nicht triumphierend.",
-         bilanz, KARTE_UEBER_GESICHT),
+         bilanz, KARTE_OBEN),
         ("10:40", "Abschluss", "Kurz, dann Endkarte.", abschluss, ""),
     ]
 
@@ -315,17 +321,17 @@ def panels(st: gfx.Style) -> list[tuple[str, str, str, callable, str]]:
 # ----------------------------------------------------------------- Bauen ---
 
 def draw_konflikt(img, st, text):
-    """Ein Warnstreifen auf dem Bild selbst, nicht in der Bildunterschrift.
+    """Ein Hinweisstreifen auf dem Bild selbst, nicht in der Bildunterschrift.
 
-    Wer das Storyboard durchblättert, soll die Stelle sehen und nicht erst
-    unten lesen müssen, dass sie ein Problem hat.
+    Wer das Storyboard durchblättert, soll die besondere Stelle im Bild sehen
+    und nicht erst darunter lesen müssen, warum sie besonders ist.
     """
     draw = ImageDraw.Draw(img, "RGBA")
     font = st.font(int(H * 0.026))
     tw, th = gfx._text_size(draw, text, font)
     pad = H * 0.016
     bar_h = th + pad * 2
-    draw.rectangle([0, H - bar_h, W, H], fill=(178, 44, 36, 235))
+    draw.rectangle([0, H - bar_h, W, H], fill=(*st.accent, 235))
     draw.text(((W - tw) / 2, H - bar_h + pad), text, font=font,
               fill=(255, 255, 255, 255))
 
@@ -378,7 +384,7 @@ def build(out_dir: Path) -> list[Path]:
         img.convert("RGB").save(path)
         made.append(path)
         print(f"  {path.name:38} {zeit:>5}  {notiz}"
-              + (f"   ⚠ {konflikt}" if konflikt else ""))
+              + (f"   ↑ {konflikt}" if konflikt else ""))
 
     sheet = contact_sheet(made, panels(st), out_dir / "00_uebersicht.png", st)
     made.insert(0, sheet)
@@ -420,8 +426,8 @@ def contact_sheet(paths, blocks, out: Path, st, cols=3, thumb_w=620) -> Path:
         d.text((x, y + thumb_h + 12), zeit, font=zeit_f, fill=(255, 140, 60))
         d.text((x + 110, y + thumb_h + 12), _fit(d, name, name_f, thumb_w - 110),
                font=name_f, fill=(238, 238, 238))
-        line = f"⚠ {konflikt}" if konflikt else notiz
-        colour = (232, 108, 96) if konflikt else (150, 155, 165)
+        line = f"↑ {konflikt}" if konflikt else notiz
+        colour = (255, 150, 80) if konflikt else (150, 155, 165)
         d.text((x, y + thumb_h + 50), _fit(d, line, note_f, thumb_w),
                font=note_f, fill=colour)
 

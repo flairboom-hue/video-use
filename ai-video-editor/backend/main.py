@@ -144,6 +144,7 @@ def health() -> dict:
         "graphic_kinds": gfx.available_kinds(),
         "param_only_kinds": sorted(pipeline.PARAM_ONLY_KINDS),
         "graphic_themes": gfx.available_themes(),
+        "graphic_placements": gfx.available_placements(),
         "motion_blur_levels": gfx.available_motion_blur(),
         "icons": gfx.available_icons(),
         "aspects": list(ASPECTS),
