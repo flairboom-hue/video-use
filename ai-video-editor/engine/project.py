@@ -99,6 +99,8 @@ class Project:
                 # the strongest place for it. Set to "top" for the blocks
                 # where the speaker is on screen underneath.
                 "graphic_placement": "center",
+                "graphic_pace": "calm",
+                "graphic_easing": "smooth",
                 "motion_blur": "off",
                 "aspect": "16:9",
                 "remove_fillers": True,

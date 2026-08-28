@@ -37,11 +37,36 @@ def ease_in_out_cubic(t: float) -> float:
     return 4 * t ** 3 if t < 0.5 else 1 - (-2 * t + 2) ** 3 / 2
 
 
+def ease_out_back(t: float, overshoot: float = 1.70158) -> float:
+    """Lands slightly past the target and settles back.
+
+    Returns values ABOVE 1 in the middle of the move, which is the whole
+    point and also the danger: applied to a figure it would show a number the
+    data does not contain. It is only ever used for position — see
+    Style.ease_move.
+    """
+    c3 = overshoot + 1
+    return 1 + c3 * (t - 1) ** 3 + overshoot * (t - 1) ** 2
+
+
 # Captions occupy a band at the bottom of the frame (see captions.py MarginV).
 # Graphics must stay above it — a chart with a subtitle across its middle is
 # the most common failure of automated overlay placement.
 CAPTION_SAFE_BOTTOM = 0.26   # fraction of frame height reserved for captions
 PLACEMENTS = ("center", "top", "bottom")
+
+# How fast a graphic assembles itself. `calm` is the original timing and stays
+# the default — the whole set was tuned against it.
+PACE_LEVELS: dict[str, tuple[float, float]] = {
+    "calm": (0.9, 1.0),      # reveal, hold
+    "brisk": (0.65, 0.75),
+    "quick": (0.45, 0.55),
+}
+BASE_REVEAL = PACE_LEVELS["calm"][0]
+
+# How it lands. `spring` overshoots slightly and settles, which reads as snap;
+# `smooth` is the eased landing everything was built with.
+EASINGS = ("smooth", "spring")
 
 
 @dataclass
@@ -81,13 +106,39 @@ class Style:
     placement: str = "center"
     placement_fraction: float = 0.42   # share of the frame the band may use
 
+    easing: str = "smooth"
+
     # Filled in by __post_init__ for a placed graphic: the generators lay out
     # inside `height` (the band) and the frame is composited into a canvas of
     # `canvas_height` at `canvas_offset_y`. Zero means "no band", i.e. centred.
     canvas_height: int = 0
     canvas_offset_y: int = 0
 
+    @property
+    def tempo(self) -> float:
+        """Scale for the hand-tuned stagger constants, 1.0 at the default pace.
+
+        Those numbers were chosen against the default reveal. Left absolute, a
+        faster pace would only shorten the hold and leave the entrance exactly
+        as slow as before — the graphic would end sooner without ever feeling
+        quicker.
+        """
+        return self.reveal / BASE_REVEAL
+
+    def ease_move(self, p: float) -> float:
+        """Easing for POSITION. May exceed 1 under `spring`.
+
+        Never use this for a value. A bar that overshoots is a bar longer than
+        its own measurement, and a counter that overshoots shows a figure the
+        data does not contain — in a video whose subject is honest numbers,
+        that is the one animation that must not be allowed to lie.
+        """
+        return ease_out_back(p) if self.easing == "spring" else ease_out_cubic(p)
+
     def __post_init__(self) -> None:
+        if self.easing not in EASINGS:
+            raise GraphicsError(
+                f"unknown easing '{self.easing}'. Available: {list(EASINGS)}")
         if self.placement == "center":
             return
         if self.placement not in PLACEMENTS:
@@ -366,7 +417,7 @@ def bar_chart(out: Path, values: list[float], labels: list[str] | None = None,
     st = style or Style()
     if not values:
         raise GraphicsError("bar_chart needs at least one value")
-    dur = duration or (st.reveal + 0.25 * len(values) + st.hold)
+    dur = duration or (st.reveal + 0.25 * st.tempo * len(values) + st.hold)
     labels = labels or [""] * len(values)
     peak = max(values) or 1.0
 
@@ -380,7 +431,7 @@ def bar_chart(out: Path, values: list[float], labels: list[str] | None = None,
 
     value_font = st.font(int(st.height * 0.052))
     label_font = st.font(int(st.height * 0.032))
-    stagger = 0.18
+    stagger = 0.18 * st.tempo
 
     def frame(draw, t, img):
         _panel(draw, st)
@@ -411,7 +462,7 @@ def comparison(out: Path, before: float, after: float, label_before: str = "VORH
                style: Style | None = None, duration: float | None = None) -> Path:
     """Two figures with an arrow — "von X auf Y" made visible."""
     st = style or Style()
-    dur = duration or (st.reveal + 0.4 + st.hold)
+    dur = duration or (st.reveal + 0.4 * st.tempo + st.hold)
     big = st.font(int(st.height * 0.13))
     small = st.font(int(st.height * 0.035))
 
@@ -424,7 +475,7 @@ def comparison(out: Path, before: float, after: float, label_before: str = "VORH
         _panel(draw, st)
         elapsed = t * dur
         p1 = ease_out_cubic(max(0.0, min(1.0, elapsed / st.reveal)))
-        p2 = ease_out_cubic(max(0.0, min(1.0, (elapsed - 0.35) / st.reveal)))
+        p2 = ease_out_cubic(max(0.0, min(1.0, (elapsed - 0.35 * st.tempo) / st.reveal)))
         cy = st.content_center_y
         cx_l, cx_r = st.width * 0.28, st.width * 0.72
 
@@ -512,7 +563,7 @@ def text_animation(out: Path, text: str, style: Style | None = None,
     """
     st = style or Style()
     words = text.split()
-    dur = duration or (0.22 * len(words) + st.hold)
+    dur = duration or (0.22 * st.tempo * len(words) + st.hold)
     font = st.font(int(st.height * 0.085))
     per = (dur - st.hold) / max(1, len(words))
 
@@ -525,9 +576,11 @@ def text_animation(out: Path, text: str, style: Style | None = None,
         y = st.content_center_y - h / 2
         cursor = x
         for i, w in enumerate(words[:shown]):
-            local = ease_out_cubic(max(0.0, min(1.0, (elapsed - i * per) / 0.25)))
+            raw = max(0.0, min(1.0, (elapsed - i * per) / (0.25 * st.tempo)))
+            local = ease_out_cubic(raw)
+            move = st.ease_move(raw)
             ww, _ = _text_size(draw, w + " ", font)
-            _write(draw, (cursor, y + (1 - local) * st.height * 0.02), w, font,
+            _write(draw, (cursor, y + (1 - move) * st.height * 0.02), w, font,
                    (*(st.accent if i == len(words) - 1 else st.text), int(255 * local)), st)
             cursor += ww
     return _render(frame, dur, st, out)
@@ -561,7 +614,7 @@ def pie_chart(out: Path, values: list[float], labels: list[str] | None = None,
         values = head + [sum(tail)]
 
     total = sum(values) or 1.0
-    dur = duration or (st.reveal + 0.2 * len(values) + st.hold)
+    dur = duration or (st.reveal + 0.2 * st.tempo * len(values) + st.hold)
 
     # Palette: the accent leads, the rest step down in weight so the first
     # slice reads as the point being made.
@@ -580,7 +633,7 @@ def pie_chart(out: Path, values: list[float], labels: list[str] | None = None,
     # One continuous sweep across the whole ring rather than a stagger per
     # slice. Staggering leaves wedges floating detached from each other
     # mid-animation, which reads as a broken render instead of a build.
-    sweep_time = st.reveal + 0.2 * len(values)
+    sweep_time = st.reveal + 0.2 * st.tempo * len(values)
 
     def frame(draw, t, img):
         _panel(draw, st)
@@ -753,7 +806,7 @@ def icon_row(out: Path, items: list[tuple[str, str]] | list[str],
         pairs = pairs[:MAX_ITEMS]
 
     n = len(pairs)
-    dur = duration or (0.28 * n + st.hold)
+    dur = duration or (0.28 * st.tempo * n + st.hold)
     step = st.width * 0.72 / n
     left = st.width / 2 - step * (n - 1) / 2
     cy = st.content_center_y
@@ -761,19 +814,21 @@ def icon_row(out: Path, items: list[tuple[str, str]] | list[str],
     ring = r * 1.55
     weight = max(3, int(st.height * 0.007))
     label_font = st.font(int(st.height * 0.032))
-    stagger = 0.22
+    stagger = 0.22 * st.tempo
 
     def frame(draw, t, img):
         _panel(draw, st)
         elapsed = t * dur
         for i, (name, label) in enumerate(pairs):
-            p = ease_out_cubic(max(0.0, min(1.0, (elapsed - i * stagger) / 0.42)))
-            if p <= 0:
+            raw = max(0.0, min(1.0, (elapsed - i * stagger) / (0.42 * st.tempo)))
+            fade = ease_out_cubic(raw)
+            move = st.ease_move(raw)
+            if fade <= 0:
                 break
-            alpha = int(255 * p)
+            alpha = int(255 * fade)
             x = left + i * step
             # Rises slightly into place instead of appearing flat.
-            y = cy - (1 - p) * st.height * 0.02
+            y = cy - (1 - move) * st.height * 0.02
             colour = st.accent if i == n - 1 else st.accent_2
 
             if circle:
@@ -809,8 +864,8 @@ def stat_card(out: Path, items: list[tuple[str, str]], style: Style | None = Non
     cols = columns or (n if n <= 4 else (n + 1) // 2)
     rows = (n + cols - 1) // cols
 
-    dur = duration or (0.22 * n + st.hold)
-    stagger = 0.2
+    dur = duration or (0.22 * st.tempo * n + st.hold)
+    stagger = 0.2 * st.tempo
 
     value_font = st.font(int(st.height * (0.115 if cols <= 3 else 0.085)))
     label_font = st.font(int(st.height * 0.028))
@@ -833,14 +888,18 @@ def stat_card(out: Path, items: list[tuple[str, str]], style: Style | None = Non
         _panel(draw, st, band=(block_top - pad, block_top + block_h + pad))
         elapsed = t * dur
         for idx, (value, label) in enumerate(pairs):
-            p = ease_out_cubic(max(0.0, min(1.0, (elapsed - idx * stagger) / 0.45)))
-            if p <= 0:
+            raw = max(0.0, min(1.0, (elapsed - idx * stagger) / (0.45 * st.tempo)))
+            # Two curves from one clock: opacity must not exceed full, and
+            # position is the only thing allowed to overshoot.
+            fade = ease_out_cubic(raw)
+            move = st.ease_move(raw)
+            if fade <= 0:
                 break
-            alpha = int(255 * p)
+            alpha = int(255 * fade)
             r, c = divmod(idx, cols)
             cx = left + c * col_w
             top = block_top + r * (cell_h + value_size * 0.5) \
-                - (1 - p) * st.height * 0.015
+                - (1 - move) * st.height * 0.015
 
             vw, _ = _text_size(draw, value, value_font)
             _write(draw, (cx - vw / 2, top), value, value_font,
@@ -871,8 +930,8 @@ def bar_chart_h(out: Path, items: list[tuple[str, float]], style: Style | None =
     peak = max(v for _, v in rows) or 1.0
     n = len(rows)
 
-    dur = duration or (st.reveal + 0.1 * n + st.hold)
-    stagger = min(0.14, 1.2 / n)
+    dur = duration or (st.reveal + 0.1 * st.tempo * n + st.hold)
+    stagger = min(0.14, 1.2 / n) * st.tempo
 
     label_font = st.font(int(st.height * min(0.036, 0.52 / n)))
     value_font = st.font(int(st.height * min(0.036, 0.52 / n)))
@@ -1095,6 +1154,16 @@ GENERATORS = {
     "bar_chart_h": bar_chart_h,
     "linked_meters": linked_meters,
 }
+
+
+def available_paces() -> list[str]:
+    """How fast a graphic assembles itself."""
+    return list(PACE_LEVELS)
+
+
+def available_easings() -> list[str]:
+    """How it lands. Only position springs; values never do."""
+    return list(EASINGS)
 
 
 def available_placements() -> list[str]:

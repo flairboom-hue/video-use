@@ -210,10 +210,19 @@ def build_graphic(project: Project, suggestion_id: str, kind: str = "",
     # centred depends on what is under it in that shot, not on the project.
     placement = str(params.get("placement")
                     or project.data["settings"].get("graphic_placement", "center"))
+    pace = str(params.get("pace")
+               or project.data["settings"].get("graphic_pace", "calm"))
+    if pace not in gfx.PACE_LEVELS:
+        raise ValueError(f"'{pace}' is not a pace. Available: {gfx.available_paces()}")
+    reveal, hold = gfx.PACE_LEVELS[pace]
     style = gfx.make_style(
         theme,
         motion_blur=blur,
         placement=placement,
+        reveal=reveal,
+        hold=hold,
+        easing=str(params.get("easing")
+                   or project.data["settings"].get("graphic_easing", "smooth")),
         width=int(info.get("width") or 1920),
         height=int(info.get("height") or 1080),
         fps=int(round(float(info.get("fps") or 30))),

@@ -138,6 +138,8 @@ select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);b
       <select id="capstyle"></select>
       <select id="theme" title="Grafik-Design"></select>
       <select id="place" title="Wo die Grafik sitzt — „top“ lässt das Gesicht frei"></select>
+      <select id="pace" title="Wie schnell sich eine Grafik aufbaut"></select>
+      <select id="easing" title="Wie sie landet — „Feder“ schwingt leicht über"></select>
       <select id="mblur" title="Motion Blur — kostet Renderzeit"></select>
       <button id="bCompare" title="Vorher/Nachher aus zwei Dateien in ASSETS/">Vorher/Nachher</button>
       <button id="prev">Vorschau rendern</button>
@@ -212,6 +214,12 @@ async function health() {
                        bottom:"Grafik: unten"};
   $("#place").innerHTML = (HEALTH.graphic_placements||[])
     .map(t=>`<option value="${t}">${placeLabels[t]||t}</option>`).join("");
+  const paceLabels = {calm:"Tempo: ruhig", brisk:"Tempo: zügig", quick:"Tempo: schnell"};
+  $("#pace").innerHTML = (HEALTH.graphic_paces||[])
+    .map(t=>`<option value="${t}">${paceLabels[t]||t}</option>`).join("");
+  const easeLabels = {smooth:"Landung: weich", spring:"Landung: Feder"};
+  $("#easing").innerHTML = (HEALTH.graphic_easings||[])
+    .map(t=>`<option value="${t}">${easeLabels[t]||t}</option>`).join("");
 }
 
 /* ---------------- websocket ---------------- */
@@ -432,6 +440,18 @@ $("#theme").onchange = async e => {
 $("#place").onchange = async e => {
   await api(`/api/projects/${P.id}/settings`, {method:"POST",
     body:JSON.stringify({graphic_placement:e.target.value})});
+  toast(e.target.options[e.target.selectedIndex].text
+        + " — angenommene Grafiken neu rendern");
+};
+$("#pace").onchange = async e => {
+  await api(`/api/projects/${P.id}/settings`, {method:"POST",
+    body:JSON.stringify({graphic_pace:e.target.value})});
+  toast(e.target.options[e.target.selectedIndex].text
+        + " — angenommene Grafiken neu rendern");
+};
+$("#easing").onchange = async e => {
+  await api(`/api/projects/${P.id}/settings`, {method:"POST",
+    body:JSON.stringify({graphic_easing:e.target.value})});
   toast(e.target.options[e.target.selectedIndex].text
         + " — angenommene Grafiken neu rendern");
 };

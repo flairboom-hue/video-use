@@ -472,3 +472,102 @@ class TestPlacement:
         assert placed.width == centred.width, "the card should stay full width"
         assert placed.font(int(placed.height * 0.1)).size < \
             centred.font(int(centred.height * 0.1)).size
+
+
+class TestPace:
+    """How fast a graphic assembles itself."""
+
+    def test_the_default_is_the_original_timing(self):
+        # Every stagger constant in this module was tuned against it; changing
+        # the default would silently re-time ten generators.
+        from engine.graphics import PACE_LEVELS
+        st = Style()
+        assert PACE_LEVELS["calm"] == (st.reveal, st.hold)
+        assert st.tempo == 1.0
+
+    def test_a_faster_pace_scales_the_staggers_too(self):
+        # Shortening only the hold ends the graphic sooner without ever making
+        # the entrance feel quicker — the flat part would just be cut short.
+        from engine.graphics import PACE_LEVELS
+        quick = Style(reveal=PACE_LEVELS["quick"][0])
+        assert quick.tempo == pytest.approx(PACE_LEVELS["quick"][0] / Style().reveal)
+        assert quick.tempo < 1.0
+
+    def test_paces_are_ordered_and_all_positive(self):
+        from engine.graphics import PACE_LEVELS, available_paces
+        assert set(available_paces()) == set(PACE_LEVELS)
+        reveals = [r for r, _ in PACE_LEVELS.values()]
+        assert reveals == sorted(reveals, reverse=True)
+        assert all(r > 0 and h > 0 for r, h in PACE_LEVELS.values())
+
+
+class TestSpring:
+    """The overshoot, and the line it is not allowed to cross."""
+
+    def test_the_curve_is_anchored_at_both_ends(self):
+        from engine.graphics import ease_out_back
+        assert ease_out_back(0.0) == pytest.approx(0.0)
+        assert ease_out_back(1.0) == pytest.approx(1.0)
+
+    def test_it_actually_overshoots(self):
+        from engine.graphics import ease_out_back
+        assert max(ease_out_back(i / 200) for i in range(201)) > 1.05
+
+    def test_smooth_never_exceeds_its_target(self):
+        st = Style(easing="smooth")
+        assert max(st.ease_move(i / 200) for i in range(201)) <= 1.0
+
+    def test_an_unknown_easing_raises_rather_than_falling_back(self):
+        from engine.graphics import GraphicsError
+        with pytest.raises(GraphicsError):
+            Style(easing="bounce")
+
+    @staticmethod
+    def _frames(fn, args, easing, n=6):
+        """Compose a few frames without ffmpeg, for comparison."""
+        from PIL import Image
+
+        from engine import graphics as g
+        st = make_style("light_card", width=320, height=180, fps=15,
+                        easing=easing, reserve_caption_band=False)
+        cap = {}
+
+        def fake(frame, dur, s, out):
+            cap["frame"] = frame
+            return out
+
+        real, g._render = g._render, fake
+        try:
+            fn(__import__("pathlib").Path("x.mov"), *args, st)
+        finally:
+            g._render = real
+        out = []
+        for i in range(n):
+            img = Image.new("RGBA", (320, 180), (0, 0, 0, 0))
+            cap["frame"](__import__("PIL.ImageDraw", fromlist=["ImageDraw"])
+                         .Draw(img, "RGBA"), i / (n - 1), img)
+            out.append(img.tobytes())
+        return out
+
+    def test_a_measured_value_never_springs(self):
+        # A bar that overshoots is longer than its own measurement and a
+        # counter that overshoots shows a figure the data does not contain.
+        # In a video whose subject is honest numbers, that animation must not
+        # be allowed to lie — so these generators ignore the setting entirely.
+        from engine import graphics as g
+        for fn, args in ((g.number_animation, (42, "Test", "")),
+                         (g.bar_chart, ([3, 7, 5], ["a", "b", "c"])),
+                         (g.pie_chart, ([30, 45, 25], None)),
+                         (g.bar_chart_h, ([("a", 3), ("b", 7)],))):
+            assert self._frames(fn, args, "smooth") == self._frames(fn, args, "spring"), \
+                f"{fn.__name__} changed with the easing — it animates a value"
+
+    def test_an_entrance_does_spring(self):
+        # And the ones whose movement is only an entrance must actually change,
+        # or the setting is a dead control.
+        from engine import graphics as g
+        for fn, args in ((g.stat_card, ([("36", "Tage"), ("387", "Commits")],)),
+                         (g.icon_row, ([("check", "eins"), ("star", "zwei")],)),
+                         (g.text_animation, ("Sieben Fehler",))):
+            assert self._frames(fn, args, "smooth") != self._frames(fn, args, "spring"), \
+                f"{fn.__name__} ignores the easing setting"

@@ -105,6 +105,34 @@ hundred pixels and costs you seven times the render. It earns its keep on fast
 motion — a whip-in, a swipe, a spin. Default is off for that reason; turn it on
 per project when the movement is quick enough to strobe without it.
 
+## Pace, and how a graphic lands
+
+Two settings, because they are the two things that make an animation feel
+slow. Both default to what the set was built with, so nothing moves unless you
+ask.
+
+| Pace | reveal / hold | A four-figure stat card |
+|---|---|---|
+| `calm` *(default)* | 0.90 / 1.00 | 1.87 s |
+| `brisk` | 0.65 / 0.75 | 1.33 s |
+| `quick` | 0.45 / 0.55 | 0.93 s |
+
+Pace scales the staggers too, not just the hold. The stagger constants were
+hand-tuned against the default reveal, so leaving them absolute would end the
+graphic sooner without ever making the entrance quicker — the flat second at
+the end would just be cut short.
+
+`easing` is `smooth` (default) or `spring`. Spring overshoots by about 10% and
+settles, which is what reads as snap.
+
+**It never touches a value.** A bar that overshoots is longer than its own
+measurement; a counter that overshoots displays a figure the data does not
+contain. So `number_animation`, `bar_chart`, `bar_chart_h`, `pie_chart` and
+`comparison` ignore the setting entirely and render identically under both —
+asserted by a test, not by convention. Only `stat_card`, `icon_row` and
+`text_animation` spring, and only in their position: opacity is driven off a
+second curve that cannot exceed full.
+
 ## Where a graphic sits
 
 A card is a full-width plate — 6% to 94% of the frame — over the vertical
