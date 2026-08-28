@@ -45,26 +45,58 @@ analysieren, Rohschnitt anschauen. Ein Problem nach einer Minute ist ein
 
 ## Der Aufbau
 
-### Ton
+### Ton — Shure MV6
 
-**Eine Quelle.** Nicht Kamera plus separater Recorder. Die ganze Kette hängt an
-*einer* Datei: Transkript, Wortzeiten, Anker, Untertitel. Zwei Quellen heißen
-synchronisieren, und jeder Versatz verschiebt am Ende die Untertitel.
+**Alles mit demselben Mikrofon, derselben Entfernung, denselben Einstellungen.**
+Nicht aus Ordnungsliebe: der Lautheitsabgleich am Ende misst die *fertige*
+Tonspur einmal und legt *eine* Verstärkung über alles (`loudnorm`, zweistufig,
+`linear=true`, Ziel −14 LUFS). Ein Blockunterschied wird dadurch nicht
+ausgeglichen, er wird mitgenommen. Notier dir Pegelstellung und Abstand.
 
-**Mikro nah**, 20–30 cm, leicht seitlich versetzt statt frontal — dann treffen
-Plosive nicht direkt auf die Kapsel.
+**Auto Level Mode aus.** Das ist die wichtigste Einstellung am MV6 und die, die
+man intuitiv anlässt. Automatische Pegelung zieht in leisen Passagen die
+Verstärkung hoch — also genau in den Pausen. Der Rohschnitt entscheidet aber
+über Lautstärkeschwellen, was Pause ist und was nicht. Eine hochgeregelte Pause
+ist für ihn keine Pause mehr. Fester Pegel, von Hand eingestellt.
 
-**Kein Noise Gate beim Aufnehmen.** Es klingt sauberer und macht das Transkript
-schlechter: Gates schneiden leise Wortanfänge und Zischlaute ab, und genau die
-braucht die Spracherkennung für saubere Wortgrenzen. Ungenaue Wortgrenzen heißen
-verrutschte Anker und verrutschte Untertitel. Lieber ein leiser Raum als ein
-Gate.
+**Entrauschen aus, Poppschutz an.** Dieselbe Logik: alles, was am Pegel der
+Stille dreht, arbeitet gegen den Schnitt. Der Poppschutz greift in Plosive und
+nicht in Pausen, der darf bleiben.
 
-**Zehn Sekunden Raumton** am Anfang jeder Session aufnehmen, bevor du sprichst.
-Kostet nichts und rettet dich, falls doch entrauscht werden muss.
+**Näher ran als du denkst.** Das MV6 ist ein dynamisches Mikrofon — es hört
+absichtlich wenig Raum, aber nur, wenn du nah dran bist. Eine Handbreit,
+10–20 cm. Auf 40 cm bekommst du wenig Stimme und viel Zimmer, und damit steigt
+der Störpegel gegenüber der Stimme; das ist das, was `tontest.py` als „zu laut"
+meldet. Front auf den Mund ausrichten, leicht seitlich versetzt, damit Plosive
+nicht direkt in die Kapsel gehen.
 
-**Kopfhörer auf.** Ein Problem, das du beim Aufnehmen hörst, kostet einen Take.
-Dasselbe Problem beim Schnitt kostet den Drehtag.
+**Kopfhörer in das MV6.** Direktes Mithören, ohne Umweg über den Rechner. Ein
+Problem, das du beim Aufnehmen hörst, kostet einen Take; dasselbe Problem beim
+Schnitt kostet den Drehtag.
+
+### Voice-over: dasselbe Mikrofon, und die Kamera läuft mit
+
+Ja, dieselbe Kette für alles — Talking Head und Voice-over. Zwei Klangbilder in
+einem Video hört man an der Schnittstelle, und der Lautheitsabgleich bügelt das
+nicht aus (siehe oben).
+
+**Die Kamera läuft auch bei reinen Voice-over-Blöcken mit.** Zwei Gründe, beide
+handfest:
+
+Erstens nimmt das Werkzeug **keine reinen Tondateien** an. Der Import bricht mit
+„no video stream in the file" ab — eine WAV oder MP3 kommt gar nicht erst
+hinein.
+
+Zweitens braucht der Schnittplan im Skript die Facecam an mehr Stellen, als „nur
+Gameplay" vermuten lässt: bei 0:08 neben der Zahlenkarte, bei 5:00 groß, bei
+2:45–5:00 klein neben den Gegenüberstellungen. Material, das du nicht gedreht
+hast, kannst du im Schnitt nicht klein einblenden.
+
+**Eine Datei, nicht zwei Geräte.** Das MV6 hängt am Rechner, die Kamera ist ein
+zweites Gerät — das ist genau die Trennung, die man nicht will. Nimm mit **OBS**
+auf: Kamera als Videoquelle, MV6 als Tonquelle, Aufnahme in *eine* MP4. Dann
+hängt die ganze Kette an einer Datei, es gibt nichts zu synchronisieren, und
+kein Versatz kann die Untertitel verschieben.
 
 ### Kamera
 
@@ -75,18 +107,18 @@ auf den eigenen Sucher liest sich als Blick an den Zuschauer vorbei.
 **Bildrate wie beim Veröffentlichen.** Das Werkzeug übernimmt die Bildrate der
 Quelle, es rechnet nichts um.
 
-**Zwei Bildtypen, und sie hängen an den Grafiken.** Die Grafikkarten sind
-Vollbreite-Platten — sie reichen von 6 % bis 94 % der Bildbreite und liegen
-mittig. Über deinem Gesicht liegt dann eine Karte. Also:
+**Wie viel Facecam wo zu sehen ist, entscheidet der Schnittplan im Skript** —
+nicht die Aufnahme. Beim Drehen gilt schlicht: Kamera läuft, jeder Block wird
+als Facecam aufgenommen. Beim Schnitt liegt dann Gameplay oder eine Grafik
+darüber, wo das Skript es so vorsieht.
 
-| | Bild | Blöcke |
-|---|---|---|
-| **A** | Talking Head | Blöcke **ohne** Grafik: Hook, das Geständnis, Abschluss |
-| **B** | Ton über Spielaufnahme | Blöcke **mit** Grafik oder Gegenüberstellung |
-
-Praktisch: sprich alles als Talking Head, aber sorge dafür, dass für jeden Block
-aus Spalte B genug Spielmaterial da ist, auf das geschnitten werden kann. Ohne
-das hast du eine Grafik, die über deinem Kopf klebt.
+Ein Punkt dazu, den du wissen solltest, bevor du es im Schnitt suchst: die
+Grafikkarten sind **Vollbreite-Platten**, von 6 % bis 94 % der Bildbreite. Sie
+verdecken, was darunter liegt. Und Einblendungen liegen immer im vollen Bild —
+ein **kleines** Facecam-Fenster neben einer großen Gegenüberstellung (so will es
+der Schnittplan bei 2:45–5:00) kann das Werkzeug nicht. Diese Stelle wird also
+entweder ein harter Wechsel zwischen Gesicht und Vergleich, oder du baust das
+Bild-in-Bild von Hand.
 
 **Untere 26 % des Bildes freihalten.** Da liegen die Untertitel. Kinn oberhalb
 dieser Linie, und nichts Wichtiges darunter.
@@ -152,21 +184,25 @@ Nicht der technisch sauberste gewinnt.
 
 ## Der Drehplan
 
+Die Bildspalte folgt dem Schnittplan aus `YOUTUBE-SKRIPT.md`. Gedreht wird
+trotzdem jeder Block als Facecam — was am Ende zu sehen ist, entscheidet
+der Schnitt.
+
 | Zeit | Block | Bild | Was dazu liegt | Ton |
 |---|---|---|---|---|
-| 0:00 | Hook | **A** + Sturz, Bescheid mit Stempel | — | Kein Anlauf. Erster Satz ist der erste Satz. |
-| 0:08 | Prämisse + KI-Frage | **B** | Zahlenkarte, Balken geschrieben/gelöscht | Nüchtern. Die Zahlen tragen sich selbst. **Achtung:** der Satz „keine generierte Musik" darf so nicht fallen — siehe `AUFNAHMEPLAN.md`. |
-| 0:45 | Kapitel „7 Fehler" | **B** | Kapitelkarte | Kurz, als Übergang. |
-| 0:50 | Was das Spiel ist | **B** — Aufstieg durch Zonen | — | Erklärend, verzeiht am meisten. |
-| 1:20 | Drei Bescheide | **B** | — | Rhythmisch, die drei kommen nacheinander. |
-| 1:45 | Pogo-Physik | **B** — Sprungaufnahme | Regler „Ladung", zwei Balken | Ruhig. Die Grafik erklärt, du benennst nur. |
-| 2:30 | Landefenster | **B** — Vollbild | Waagerechtes Balkendiagramm, elf Zonen | Lass der Grafik Zeit, elf Zeilen liest niemand nebenbei. |
-| 2:45–5:00 | **Die sieben Fehler** | **B** | Fünf Vorher/Nachher-Wischblenden, zwei Grafiken | Herzstück. Pro Fehler: was war, was ich dachte, was es war. |
-| 5:15 | Was gut geworden ist | **B** — Figuren, Truhe, Garderobe | Zahlenkarte 2, Draw Calls, verschmolzen | Hörbar anderer Ton als davor — hier darf Freude rein. |
-| 7:30 | **Das Geständnis** | **A** | — | Kein Schnitt. Siehe oben. |
-| 9:00 | Steam-Kapitel | **B** — Terminal, Achievements, Startgarten | Kapitelkarte, neun Fehler, 44 %, Wischblende Startgarten | Trocken. Die Fehler sind komisch genug ohne Hilfe. |
-| 10:20 | Bilanz | **B** | Zahlenkarte 3 | Zurückblickend, nicht triumphierend. |
-| 10:20–11:00 | Abschluss | **A** | — | Kurz. Nicht um einen Appell herum bauen. |
+| 0:00 | Hook | nur Spielaufnahme: Sturz, Bescheid mit Stempel | — | Kein Anlauf. Erster Satz ist der erste Satz. |
+| 0:08 | Prämisse + KI-Frage | Facecam + Karte | Zahlenkarte, Balken geschrieben/gelöscht | Nüchtern. Die Zahlen tragen sich selbst. **Achtung:** der Satz „keine generierte Musik" darf so nicht fallen — siehe `AUFNAHMEPLAN.md`. |
+| 0:45 | Kapitel „7 Fehler" | Spielaufnahme | Kapitelkarte | Kurz, als Übergang. |
+| 0:50 | Was das Spiel ist | Aufstieg durch Zonen, wenig Facecam | — | Erklärend, verzeiht am meisten. |
+| 1:20 | Drei Bescheide | Spielaufnahme | — | Rhythmisch, die drei kommen nacheinander. |
+| 1:45 | Pogo-Physik | Sprungaufnahme | Regler „Ladung", zwei Balken | Ruhig. Die Grafik erklärt, du benennst nur. |
+| 2:30 | Landefenster | Vollbild-Diagramm | Waagerechtes Balkendiagramm, elf Zonen | Lass der Grafik Zeit, elf Zeilen liest niemand nebenbei. |
+| 2:45–5:00 | **Die sieben Fehler** | Vergleiche groß, Facecam klein | Fünf Vorher/Nachher-Wischblenden, zwei Grafiken | Herzstück. Pro Fehler: was war, was ich dachte, was es war. |
+| 5:15 | Was gut geworden ist | Figuren, Truhe, Garderobe | Zahlenkarte 2, Draw Calls, verschmolzen | Hörbar anderer Ton als davor — hier darf Freude rein. |
+| 7:30 | **Das Geständnis** | Facecam, ruhig | — | Kein Schnitt. Siehe oben. |
+| 9:00 | Steam-Kapitel | Terminal, Achievements, Startgarten | Kapitelkarte, neun Fehler, 44 %, Wischblende Startgarten | Trocken. Die Fehler sind komisch genug ohne Hilfe. |
+| 10:20 | Bilanz | Facecam groß | Zahlenkarte 3 | Zurückblickend, nicht triumphierend. |
+| 10:20–11:00 | Abschluss | Facecam groß, dann Endkarte | — | Kurz. Nicht um einen Appell herum bauen. |
 
 Die beiden wertvollsten Spielaufnahmen stehen bei 9:00: **zehn
 Erfolgs-Einblendungen hintereinander** und **Startgarten voll gegen leer**.
@@ -202,6 +238,9 @@ davon, dass du schon weißt, wie das Video klingt.
 - [ ] Raumton aufgenommen
 - [ ] Objektiv auf Augenhöhe, Blick in die Linse
 - [ ] Untere 26 % des Bildes frei
-- [ ] Kopfhörer auf, Pegel geprüft
+- [ ] Abstand zum Mikro: eine Handbreit
+- [ ] MV6: Auto Level **aus**, Entrauschen **aus**, Pegel notiert
+- [ ] Kopfhörer im MV6, Pegel geprüft
+- [ ] OBS nimmt Kamera **und** MV6 in eine Datei auf
 - [ ] Speicherkarte leer, Akku voll, Netzteil dran
 - [ ] Wasser in Reichweite, nicht im Bild
