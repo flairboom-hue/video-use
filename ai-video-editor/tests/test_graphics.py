@@ -363,7 +363,10 @@ class TestLinkedMeters:
         from engine.graphics import _panel
         st = make_style("light_card", width=1000, height=1000)
         unbanded = Image.new("RGBA", (1000, 1000), (0, 0, 0, 0))
-        _panel(ImageDraw.Draw(unbanded), st)
+        # With the frame, so the reference carries its shadow too — comparing
+        # a lifted card against an unlifted one measures the shadow, not the
+        # band.
+        _panel(ImageDraw.Draw(unbanded, "RGBA"), st, img=unbanded)
         full = unbanded.getbbox()[3] - unbanded.getbbox()[1]
 
         img = self._frame([("A", 3.0, 8.0, ""), ("B", 9.0, 15.0, "")], 1.0,
@@ -571,3 +574,122 @@ class TestSpring:
                          (g.text_animation, ("Sieben Fehler",))):
             assert self._frames(fn, args, "smooth") != self._frames(fn, args, "spring"), \
                 f"{fn.__name__} ignores the easing setting"
+
+
+class TestPanelShadow:
+    """The soft lift under a card.
+
+    Its job is separation that does not depend on what the camera shot. Over
+    dark footage the card already separates itself, so there it should change
+    almost nothing — that is the shape of a correct answer here, not a
+    shortfall.
+    """
+
+    LIGHT = (226, 219, 203)   # almost as light as the card: the hard case
+    DARK = (34, 40, 66)
+
+    @staticmethod
+    def _card(bg, shadow, size=(400, 240)):
+        from PIL import Image, ImageDraw
+
+        from engine.graphics import _panel
+        st = make_style("light_card", width=size[0], height=size[1],
+                        reserve_caption_band=False,
+                        **({} if shadow else {"panel_shadow": 0.0}))
+        img = Image.new("RGBA", size, (*bg, 255))
+        _panel(ImageDraw.Draw(img, "RGBA"), st, img=img)
+        return img.convert("RGB"), st
+
+    @staticmethod
+    def _edge_step(img, st):
+        """Sharpest luminance step across the left edge of the card."""
+        def luma(p):
+            return 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2]
+        x0 = int(img.width * st.panel_inset)
+        y = img.height // 2
+        vals = [luma(img.getpixel((x, y)))
+                for x in range(max(0, x0 - 20), min(img.width, x0 + 20))]
+        return max(abs(vals[i + 1] - vals[i]) for i in range(len(vals) - 1))
+
+    def test_it_separates_the_card_from_a_light_background(self):
+        plain, st = self._card(self.LIGHT, False)
+        lifted, _ = self._card(self.LIGHT, True)
+        assert self._edge_step(lifted, st) > self._edge_step(plain, st) * 1.5
+
+    def test_over_dark_footage_it_barely_matters(self):
+        # And that is correct: there the card already stands out. A shadow
+        # that changed this a lot would be a shadow you can see.
+        plain, st = self._card(self.DARK, False)
+        lifted, _ = self._card(self.DARK, True)
+        before, after = self._edge_step(plain, st), self._edge_step(lifted, st)
+        assert after == pytest.approx(before, rel=0.15)
+
+    def test_only_the_themes_with_a_card_have_one(self):
+        for name in available_themes():
+            st = make_style(name)
+            if not st.panel:
+                assert st.panel_shadow == 0, f"{name} has no card to lift"
+
+    def test_a_caller_that_passes_no_image_renders_as_before(self):
+        # _panel draws; the shadow has to be composited. Without the frame it
+        # simply does not happen, so every old call site still works.
+        from PIL import Image, ImageDraw
+
+        from engine.graphics import _panel
+        st = make_style("light_card", width=400, height=240)
+        a = Image.new("RGBA", (400, 240), (*self.LIGHT, 255))
+        _panel(ImageDraw.Draw(a, "RGBA"), st)
+        b = Image.new("RGBA", (400, 240), (*self.LIGHT, 255))
+        _panel(ImageDraw.Draw(b, "RGBA"), st, img=None)
+        assert a.tobytes() == b.tobytes()
+
+    def test_the_lift_fades_in_with_the_card(self):
+        # A card that wipes in must not drag a fully opaque shadow along.
+        from PIL import Image, ImageDraw
+
+        from engine.graphics import _panel
+        st = make_style("light_card", width=400, height=240)
+
+        def shadow_only(progress):
+            # Sampled just OUTSIDE the card, where nothing but the shadow is.
+            # Summing the whole layer would be dominated by the panel, whose
+            # own alpha already fades — the test would pass either way.
+            img = Image.new("RGBA", (400, 240), (0, 0, 0, 0))
+            _panel(ImageDraw.Draw(img, "RGBA"), st, progress=progress, img=img)
+            x = int(400 * st.panel_inset) - 6
+            return img.getpixel((x, 120))[3]
+
+        faint, full = shadow_only(0.3), shadow_only(1.0)
+        assert 0 < faint < full
+
+    def test_the_blurred_layer_is_computed_once_per_geometry(self):
+        # The blur is the expensive part and the card usually does not move;
+        # recomputing it per frame would multiply the render time.
+        from engine.graphics import _shadow_layer
+        a = _shadow_layer((400, 240), (10, 10, 390, 230), 8, 60, 9.0, 3)
+        b = _shadow_layer((400, 240), (10, 10, 390, 230), 8, 60, 9.0, 3)
+        assert a is b
+
+
+class TestLegibilityFloor:
+    """Type has a floor, and it is measured against the output frame."""
+
+    def test_a_band_does_not_shrink_labels_out_of_existence(self):
+        # A 0.028 label inside a 42% band is 13 px on a 1080p frame — gone on
+        # a phone. The figures stay big enough by themselves; it is the labels
+        # under them that fall off the bottom.
+        centred = make_style("light_card", width=1920, height=1080)
+        placed = make_style("light_card", width=1920, height=1080, placement="top")
+        asked = int(placed.height * 0.028)
+        assert asked < placed.min_font, "the band is not small enough to test this"
+        assert placed.font(asked).size == placed.min_font
+        assert placed.min_font == centred.min_font, \
+            "the floor moved with the band instead of the frame"
+
+    def test_it_never_grows_type_that_was_already_big_enough(self):
+        # Verified against renders: with the floor and without it, every
+        # centred graphic comes out byte-identical at 640x360 and 1920x1080.
+        st = make_style("light_card", width=1920, height=1080)
+        for fraction in (0.028, 0.05, 0.115, 0.22):
+            asked = int(st.height * fraction)
+            assert st.font(asked).size == asked

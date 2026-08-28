@@ -21,9 +21,10 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 # --------------------------------------------------------------- easing ---
 # linear reads robotic; these are the two curves the skill's animation notes
@@ -90,6 +91,9 @@ class Style:
     panel: tuple[int, int, int, int] | None = None     # backing card behind it
     panel_radius: float = 0.02      # fraction of frame height
     panel_inset: float = 0.06       # fraction of frame width
+    # A soft lift under the card, 0 = none. Only the themes that HAVE a card
+    # use it; over dark footage it changes almost nothing, which is the point.
+    panel_shadow: float = 0.0
 
     # Motion blur by temporal supersampling: render this many sub-frames per
     # output frame across the shutter interval and average them. 0 disables it.
@@ -177,7 +181,20 @@ class Style:
     def content_center_y(self) -> float:
         return self.content_height / 2
 
+    @property
+    def min_font(self) -> int:
+        """Smallest type that still survives a phone screen.
+
+        Measured against the OUTPUT frame, not the band. A card placed in a
+        band lays itself out smaller, and a label that scales all the way down
+        with it stops being readable: a 0.028 label in a 42% band is 13 px on a
+        1080p frame. The figures stay big enough on their own; it is the labels
+        under them that fall off the bottom.
+        """
+        return max(8, round((self.canvas_height or self.height) * 0.020))
+
     def font(self, size: int) -> ImageFont.FreeTypeFont:
+        size = max(int(size), self.min_font)
         candidates = [self.font_path] if self.font_path else []
         candidates += [
             "/System/Library/Fonts/Helvetica.ttc",
@@ -256,12 +273,37 @@ def _shape_edge(st: "Style", alpha: int = 255) -> tuple:
     return edge, max(2, round(st.outline_width * 0.7))
 
 
+@lru_cache(maxsize=64)
+def _shadow_layer(size: tuple[int, int], box: tuple[int, int, int, int],
+                  radius: int, alpha: int, blur: float,
+                  offset: int) -> Image.Image:
+    """The soft lift under a card, blurred once and reused for every frame.
+
+    A real Gaussian, not an approximation with concentric shapes: ImageDraw
+    replaces pixels instead of blending them, so stacked rings overwrite each
+    other into a hard dark border rather than accumulating into a gradient.
+    Tried, looked like a picture frame, measured 5x faster and thrown away.
+
+    Cached on its geometry because the card usually does not move: the blur is
+    then paid once per graphic instead of once per frame.
+    """
+    layer = Image.new("RGBA", size, (0, 0, 0, 0))
+    ImageDraw.Draw(layer).rounded_rectangle(
+        [box[0], box[1] + offset, box[2], box[3] + offset],
+        radius=radius, fill=(0, 0, 0, alpha))
+    return layer.filter(ImageFilter.GaussianBlur(blur))
+
+
 def _panel(draw: ImageDraw.ImageDraw, st: "Style", progress: float = 1.0,
-           band: tuple[float, float] | None = None) -> None:
+           band: tuple[float, float] | None = None,
+           img: Image.Image | None = None) -> None:
     """The backing card, if the theme has one.
 
     This is what actually makes a light design usable over dark footage and a
     dark one usable over bright footage — the plate, not the palette.
+
+    `img` is only needed for the shadow, which has to be composited rather
+    than drawn. Without it the card renders exactly as it did before.
     """
     if not st.panel or progress <= 0:
         return
@@ -272,10 +314,20 @@ def _panel(draw: ImageDraw.ImageDraw, st: "Style", progress: float = 1.0,
     # empty space. `band` lets a generator hand over the vertical extent its
     # content actually occupies.
     top, bottom = band if band else (inset_y, st.content_height - inset_y * 0.4)
-    draw.rounded_rectangle(
-        [inset_x, top, st.width - inset_x, bottom],
-        radius=int(st.height * st.panel_radius),
-        fill=(*st.panel[:3], alpha))
+    radius = int(st.height * st.panel_radius)
+    box = (int(inset_x), int(top), int(st.width - inset_x), int(bottom))
+
+    if st.panel_shadow > 0 and img is not None:
+        # Separation that does not depend on the footage. Measured on a
+        # background almost as light as the card itself, the edge contrast goes
+        # from 28 to 66 — over dark footage it adds nothing, which is correct,
+        # because there the card already separates itself.
+        img.alpha_composite(_shadow_layer(
+            img.size, box, radius,
+            int(round(85 * st.panel_shadow * min(1.0, progress))),
+            st.height * 0.045, int(st.height * 0.014)))
+
+    draw.rounded_rectangle(list(box), radius=radius, fill=(*st.panel[:3], alpha))
 
 
 def _encode(frames_dir: Path, out: Path, fps: int) -> Path:
@@ -394,7 +446,7 @@ def number_animation(out: Path, value: float, label: str = "", suffix: str = "",
     decimals = 0 if float(value).is_integer() else 1
 
     def frame(draw, t, img):
-        _panel(draw, st)
+        _panel(draw, st, img=img)
         p = ease_out_cubic(min(1.0, t / move)) if move > 0 else 1.0
         current = value * p
         text = f"{current:,.{decimals}f}".replace(",", ".") + suffix
@@ -434,7 +486,7 @@ def bar_chart(out: Path, values: list[float], labels: list[str] | None = None,
     stagger = 0.18 * st.tempo
 
     def frame(draw, t, img):
-        _panel(draw, st)
+        _panel(draw, st, img=img)
         elapsed = t * dur
         for i, v in enumerate(values):
             local = (elapsed - i * stagger) / st.reveal
@@ -472,7 +524,7 @@ def comparison(out: Path, before: float, after: float, label_before: str = "VORH
     final_right = f"{after:,.0f}".replace(",", ".") + suffix
 
     def frame(draw, t, img):
-        _panel(draw, st)
+        _panel(draw, st, img=img)
         elapsed = t * dur
         p1 = ease_out_cubic(max(0.0, min(1.0, elapsed / st.reveal)))
         p2 = ease_out_cubic(max(0.0, min(1.0, (elapsed - 0.35 * st.tempo) / st.reveal)))
@@ -523,7 +575,7 @@ def lower_third(out: Path, title: str, subtitle: str = "",
     bar_h = st.height * 0.11
 
     def frame(draw, t, img):
-        _panel(draw, st)
+        _panel(draw, st, img=img)
         elapsed = t * dur
         p = ease_out_cubic(max(0.0, min(1.0, elapsed / st.reveal)))
         out_p = ease_in_out_cubic(max(0.0, min(1.0, (elapsed - (dur - 0.4)) / 0.4)))
@@ -568,7 +620,7 @@ def text_animation(out: Path, text: str, style: Style | None = None,
     per = (dur - st.hold) / max(1, len(words))
 
     def frame(draw, t, img):
-        _panel(draw, st)
+        _panel(draw, st, img=img)
         elapsed = t * dur
         shown = max(1, min(len(words), int(elapsed / per) + 1)) if per > 0 else len(words)
         full_w, h = _text_size(draw, text, font)
@@ -636,7 +688,7 @@ def pie_chart(out: Path, values: list[float], labels: list[str] | None = None,
     sweep_time = st.reveal + 0.2 * st.tempo * len(values)
 
     def frame(draw, t, img):
-        _panel(draw, st)
+        _panel(draw, st, img=img)
         elapsed = t * dur
         swept = 360.0 * ease_out_cubic(max(0.0, min(1.0, elapsed / sweep_time)))
         angle = -90.0
@@ -817,7 +869,7 @@ def icon_row(out: Path, items: list[tuple[str, str]] | list[str],
     stagger = 0.22 * st.tempo
 
     def frame(draw, t, img):
-        _panel(draw, st)
+        _panel(draw, st, img=img)
         elapsed = t * dur
         for i, (name, label) in enumerate(pairs):
             raw = max(0.0, min(1.0, (elapsed - i * stagger) / (0.42 * st.tempo)))
@@ -885,7 +937,8 @@ def stat_card(out: Path, items: list[tuple[str, str]], style: Style | None = Non
     pad = st.height * 0.075
 
     def frame(draw, t, img):
-        _panel(draw, st, band=(block_top - pad, block_top + block_h + pad))
+        _panel(draw, st, band=(block_top - pad, block_top + block_h + pad),
+               img=img)
         elapsed = t * dur
         for idx, (value, label) in enumerate(pairs):
             raw = max(0.0, min(1.0, (elapsed - idx * stagger) / (0.45 * st.tempo)))
@@ -946,7 +999,7 @@ def bar_chart_h(out: Path, items: list[tuple[str, float]], style: Style | None =
     track_w = st.width * 0.56
 
     def frame(draw, t, img):
-        _panel(draw, st)
+        _panel(draw, st, img=img)
         elapsed = t * dur
         for i, (label, value) in enumerate(rows):
             p = ease_out_cubic(max(0.0, min(1.0, (elapsed - i * stagger) / st.reveal)))
@@ -1030,7 +1083,7 @@ def linked_meters(out: Path, control: str, meters: list[tuple[str, float, float,
     band = (top - pad, top + row_h * len(rows) + pad)
 
     def frame(draw, t, img):
-        _panel(draw, st, band=band)
+        _panel(draw, st, band=band, img=img)
         elapsed = t * dur
         active = min(1.0, elapsed / (dur - st.hold)) if dur > st.hold else 1.0
         # Triangle wave: up and back down, `sweeps` times, then hold at full.
@@ -1097,7 +1150,7 @@ THEMES: dict[str, dict] = {
         "accent": (232, 93, 4), "accent_2": (0, 119, 182),
         "text": (24, 28, 33), "muted": (108, 117, 125),
         "outline": None, "outline_width": 0,
-        "panel": (250, 249, 246, 242), "panel_radius": 0.024, "panel_inset": 0.07,
+        "panel": (250, 249, 246, 242), "panel_shadow": 1.0, "panel_radius": 0.024, "panel_inset": 0.07,
     },
     # No plate, heavy contour. Survives on anything and reads as the
     # high-contrast style short-form has settled on.
@@ -1111,7 +1164,7 @@ THEMES: dict[str, dict] = {
         "accent": (13, 110, 168), "accent_2": (108, 168, 204),
         "text": (33, 41, 49), "muted": (124, 137, 148),
         "outline": None, "outline_width": 0,
-        "panel": (255, 255, 255, 226), "panel_radius": 0.03, "panel_inset": 0.08,
+        "panel": (255, 255, 255, 226), "panel_shadow": 0.8, "panel_radius": 0.03, "panel_inset": 0.08,
     },
 }
 

@@ -105,6 +105,31 @@ hundred pixels and costs you seven times the render. It earns its keep on fast
 motion — a whip-in, a swipe, a spin. Default is off for that reason; turn it on
 per project when the movement is quick enough to strobe without it.
 
+## The card's shadow
+
+A soft lift under the plate, on by default in the two themes that have a
+plate. It is separation that does not depend on the footage: measured over a
+background almost as light as the card itself, the edge contrast goes from 28
+to 66. Over dark footage it changes almost nothing, which is correct — there
+the card already separates itself, and a shadow you can notice is one that is
+too strong.
+
+Two things were tried and rejected by looking at them:
+
+- **A hairline contour.** Reads as a border, and the card stops looking like a
+  card sitting on the picture and starts looking like a box drawn on top of
+  it. Contour plus shadow is worse than either.
+- **Concentric rounded rectangles instead of a blur.** Five times faster, and
+  wrong: ImageDraw replaces pixels rather than blending them, so the rings
+  overwrite each other into a hard dark border instead of accumulating into a
+  gradient. The blur is real, and cached on its geometry — the card usually
+  does not move, so it is paid once per graphic rather than once per frame.
+
+Type has a floor tied to the output frame, not to the band. Without it a 0.028
+label inside a 42% band is 13 px on a 1080p frame, which is gone on a phone.
+It never grows type that was already big enough: with and without the floor,
+every centred graphic renders byte-identical.
+
 ## Pace, and how a graphic lands
 
 Two settings, because they are the two things that make an animation feel

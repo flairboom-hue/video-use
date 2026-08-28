@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from engine.graphics import (  # noqa: E402
-    bar_chart, bar_chart_h, comparison, linked_meters, make_style,
+    PACE_LEVELS, bar_chart, bar_chart_h, comparison, linked_meters, make_style,
     number_animation, stat_card, text_animation,
 )
 
@@ -28,11 +28,21 @@ from engine.graphics import (  # noqa: E402
 # bright lawn zones and the dark moon zones without a second version.
 THEME = "light_card"
 
+# Zügig statt ruhig: die Standardfassung hält am Ende eine volle Sekunde still,
+# was über zwölf Grafiken zwölf Sekunden Standbild sind. Feder statt weicher
+# Landung — sie greift nur in Positionen, nie in eine Zahl.
+PACE = PACE_LEVELS["brisk"]
+EASING = "spring"
+
 
 def build(out_dir: Path) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     st = make_style(THEME, width=1920, height=1080, fps=30,
-                    reserve_caption_band=False)
+                    reserve_caption_band=False,
+                    reveal=PACE[0], hold=PACE[1], easing=EASING)
+    oben = make_style(THEME, width=1920, height=1080, fps=30,
+                      reserve_caption_band=True, placement="top",
+                      reveal=PACE[0], hold=PACE[1], easing=EASING)
     made: list[Path] = []
 
     def keep(path: Path) -> Path:
@@ -43,10 +53,10 @@ def build(out_dir: Path) -> list[Path]:
     # 0:45 · Kapitelkarte
     keep(text_animation(out_dir / "0-45_kapitel.mov", "7 Fehler", st))
 
-    # 0:08 · Zahlenkarte 1
+    # 0:08 · Zahlenkarte 1 — liegt über der Facecam, also ins obere Band.
     keep(stat_card(out_dir / "0-08_zahlenkarte1.mov", [
         ("26 063", "Zeilen"), ("1", "Datei"), ("36", "Tage"), ("387", "Commits"),
-    ], st))
+    ], oben))
 
     # 0:08 · geschrieben gegen gelöscht — gleiche Einheit, also ein Diagramm
     keep(bar_chart(out_dir / "0-08_geschrieben_geloescht.mov",
@@ -92,11 +102,11 @@ def build(out_dir: Path) -> list[Path]:
     keep(number_animation(out_dir / "9-00_geometrie.mov", 44,
                           "weniger Geometrie", "%", st))
 
-    # 10:20 · Bilanz
+    # 10:20 · Bilanz — ebenfalls über der Facecam.
     keep(stat_card(out_dir / "10-20_bilanz.mov", [
         ("36", "Tage"), ("387", "Commits"),
         ("26 063", "Zeilen"), ("9", "Fehler zuletzt"),
-    ], st))
+    ], oben))
 
     return made
 
@@ -105,4 +115,5 @@ if __name__ == "__main__":
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("grafiken")
     print(f"POGO GNOM — Grafiken nach {target}/\n")
     built = build(target)
-    print(f"\n{len(built)} Grafiken, Design '{THEME}', 1920x1080 mit Alphakanal.")
+    print(f"\n{len(built)} Grafiken · Design '{THEME}' · Tempo zügig · "
+          f"Landung Feder · 1920x1080 mit Alphakanal.")
