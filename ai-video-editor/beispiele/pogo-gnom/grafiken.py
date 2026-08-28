@@ -5,7 +5,12 @@ Kept as a script rather than a folder of .mov files: the numbers are still
 being reconciled across the project's documents, and a script is a diff away
 from correct where a rendered clip is a re-export away.
 
-    python beispiele/pogo-gnom/grafiken.py [ziel-ordner]
+    python beispiele/pogo-gnom/grafiken.py [ziel-ordner] [--qtrle] [--png]
+
+ProRes 4444 ist die Voreinstellung, weil die Dateien in einem Schnittprogramm
+landen. `--qtrle` ist rund siebenmal kleiner und wird von DaVinci Resolve nicht
+zuverlässig geöffnet; `--png` legt zusätzlich PNG-Sequenzen an, die überall
+funktionieren.
 
 Figures are sourced from YOUTUBE-SKRIPT.md (24 August 2026). Where the project
 documents disagree, the script's own version is used and the conflict is noted
@@ -20,8 +25,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from engine.graphics import (  # noqa: E402
-    PACE_LEVELS, bar_chart, bar_chart_h, comparison, linked_meters, make_style,
-    number_animation, stat_card, text_animation,
+    PACE_LEVELS, bar_chart, bar_chart_h, comparison, explode_to_png,
+    linked_meters, make_style, number_animation, stat_card, text_animation,
 )
 
 # light_card carries its own plate, so the graphics stay readable over both the
@@ -35,13 +40,14 @@ PACE = PACE_LEVELS["brisk"]
 EASING = "spring"
 
 
-def build(out_dir: Path) -> list[Path]:
+def build(out_dir: Path, fmt: str = "prores4444") -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     st = make_style(THEME, width=1920, height=1080, fps=30,
-                    reserve_caption_band=False,
+                    reserve_caption_band=False, export_format=fmt,
                     reveal=PACE[0], hold=PACE[1], easing=EASING)
     oben = make_style(THEME, width=1920, height=1080, fps=30,
                       reserve_caption_band=True, placement="top",
+                      export_format=fmt,
                       reveal=PACE[0], hold=PACE[1], easing=EASING)
     made: list[Path] = []
 
@@ -112,8 +118,23 @@ def build(out_dir: Path) -> list[Path]:
 
 
 if __name__ == "__main__":
-    target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("grafiken")
-    print(f"POGO GNOM — Grafiken nach {target}/\n")
-    built = build(target)
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    flags = [a for a in sys.argv[1:] if a.startswith("--")]
+    target = Path(args[0]) if args else Path("grafiken")
+
+    # ProRes 4444 als Voreinstellung, weil das Ergebnis in einem Schnittprogramm
+    # landet und nicht in einer Vorschau: qtrle ist deutlich kleiner, aber
+    # Resolve öffnet es nicht zuverlässig.
+    fmt = "qtrle" if "--qtrle" in flags else "prores4444"
+    print(f"POGO GNOM — Grafiken nach {target}/  ({fmt})\n")
+    built = build(target, fmt)
+
+    if "--png" in flags:
+        print("\nDazu als PNG-Sequenzen:")
+        for clip in built:
+            folder = explode_to_png(clip, target / "png" / clip.stem)
+            n = len(list(folder.glob("*.png")))
+            print(f"  {folder.name:34} {n:4} Bilder")
+
     print(f"\n{len(built)} Grafiken · Design '{THEME}' · Tempo zügig · "
           f"Landung Feder · 1920x1080 mit Alphakanal.")

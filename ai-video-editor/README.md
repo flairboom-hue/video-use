@@ -105,6 +105,28 @@ hundred pixels and costs you seven times the render. It earns its keep on fast
 motion — a whip-in, a swipe, a spin. Default is off for that reason; turn it on
 per project when the movement is quick enough to strobe without it.
 
+## Getting a graphic into an editor
+
+Every generator writes a clip with a real alpha channel — no background, drop
+it on a track above the video and nothing needs keying. Which container that
+is matters more than it should:
+
+| | Size (a 2.2 s 1080p chart) | Opens in |
+|---|---|---|
+| `qtrle` *(default)* | 5 MB | ffmpeg, previews. DaVinci Resolve's support is uneven, especially on Windows |
+| `prores4444` | 39 MB | what an NLE expects for an alpha clip |
+| PNG sequence | 5 MB as a folder | everything, because there is no codec to support |
+
+The default stays `qtrle` because the pipeline's own overlays never leave the
+machine. For files a person will import by hand, `prores4444` is the one that
+opens, and `explode_to_png()` is the answer when even that is refused — on flat
+graphics the folder comes out about the size of the qtrle file, so compression
+was never the reason to prefer a single file.
+
+A format in that table that quietly dropped alpha would render a card on a
+black rectangle and look fine until it was composited, so each entry's pixel
+format is asserted to be an alpha one.
+
 ## The card's shadow
 
 A soft lift under the plate, on by default in the two themes that have a

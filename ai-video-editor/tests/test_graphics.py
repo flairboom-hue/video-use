@@ -693,3 +693,46 @@ class TestLegibilityFloor:
         for fraction in (0.028, 0.05, 0.115, 0.22):
             asked = int(st.height * fraction)
             assert st.font(asked).size == asked
+
+
+class TestExportFormat:
+    """Which editor will actually open the file.
+
+    Every format here carries alpha; that is not the differentiator. The
+    differentiator is whether an NLE decodes it, and the smallest one is the
+    least likely to be decoded.
+    """
+
+    def test_the_default_is_the_compact_one(self):
+        from engine.graphics import EXPORT_FORMATS
+        assert Style().export_format == "qtrle"
+        assert "qtrle" in EXPORT_FORMATS
+
+    def test_every_offered_format_asks_for_an_alpha_pixel_format(self):
+        # A format in this table that quietly drops alpha would produce a card
+        # on a black rectangle, and it would look fine until it was composited.
+        from engine.graphics import EXPORT_FORMATS
+        for name, args in EXPORT_FORMATS.items():
+            pix = args[args.index("-pix_fmt") + 1]
+            assert pix.startswith(("argb", "rgba", "yuva")), \
+                f"{name} does not carry alpha ({pix})"
+
+    def test_an_unknown_format_is_refused_at_both_ends(self):
+        from engine.graphics import GraphicsError, _encode
+        with pytest.raises(GraphicsError):
+            Style(export_format="webm")
+        with pytest.raises(GraphicsError):
+            _encode(__import__("pathlib").Path("."),
+                    __import__("pathlib").Path("x.mov"), 30, "webm")
+
+    def test_only_implemented_formats_are_offered(self):
+        from engine.graphics import EXPORT_FORMATS, available_export_formats
+        assert set(available_export_formats()) == set(EXPORT_FORMATS)
+
+    def test_a_png_sequence_is_not_in_the_table(self):
+        # It returns a folder, and the render pipeline downstream probes what
+        # it gets back. Listing it here would put a directory where a file
+        # belongs.
+        from engine.graphics import EXPORT_FORMATS, explode_to_png
+        assert "png" not in EXPORT_FORMATS
+        assert callable(explode_to_png)

@@ -69,6 +69,24 @@ BASE_REVEAL = PACE_LEVELS["calm"][0]
 # `smooth` is the eased landing everything was built with.
 EASINGS = ("smooth", "spring")
 
+# What the finished animation is written as. Both carry a real alpha channel;
+# they differ in which editor will actually open them.
+#
+#   qtrle       QuickTime Animation. Smallest by far on flat graphics, and the
+#               one an NLE is most likely to refuse — DaVinci Resolve dropped
+#               its QuickTime dependency and its support for this is uneven,
+#               especially on Windows.
+#   prores4444  What an editor expects for an alpha clip. Roughly 7x the size
+#               of qtrle here, and it opens.
+#
+# A PNG sequence is the third answer and lives outside this table, because it
+# is a folder rather than a file — see explode_to_png.
+EXPORT_FORMATS: dict[str, list[str]] = {
+    "qtrle": ["-c:v", "qtrle", "-pix_fmt", "argb"],
+    "prores4444": ["-c:v", "prores_ks", "-profile:v", "4444",
+                   "-pix_fmt", "yuva444p10le"],
+}
+
 
 @dataclass
 class Style:
@@ -111,6 +129,7 @@ class Style:
     placement_fraction: float = 0.42   # share of the frame the band may use
 
     easing: str = "smooth"
+    export_format: str = "qtrle"
 
     # Filled in by __post_init__ for a placed graphic: the generators lay out
     # inside `height` (the band) and the frame is composited into a canvas of
@@ -140,6 +159,10 @@ class Style:
         return ease_out_back(p) if self.easing == "spring" else ease_out_cubic(p)
 
     def __post_init__(self) -> None:
+        if self.export_format not in EXPORT_FORMATS:
+            raise GraphicsError(
+                f"unknown export format '{self.export_format}'. Available: "
+                f"{list(EXPORT_FORMATS)}")
         if self.easing not in EASINGS:
             raise GraphicsError(
                 f"unknown easing '{self.easing}'. Available: {list(EASINGS)}")
@@ -330,20 +353,49 @@ def _panel(draw: ImageDraw.ImageDraw, st: "Style", progress: float = 1.0,
     draw.rounded_rectangle(list(box), radius=radius, fill=(*st.panel[:3], alpha))
 
 
-def _encode(frames_dir: Path, out: Path, fps: int) -> Path:
-    """PNG sequence -> QuickTime Animation with alpha (composites cleanly)."""
+def _encode(frames_dir: Path, out: Path, fps: int,
+            export_format: str = "qtrle") -> Path:
+    """Frame sequence -> a clip with a real alpha channel."""
     if not shutil.which("ffmpeg"):
         raise GraphicsError("ffmpeg not found on PATH — cannot encode the animation.")
+    if export_format not in EXPORT_FORMATS:
+        raise GraphicsError(
+            f"unknown export format '{export_format}'. Available: "
+            f"{list(EXPORT_FORMATS)}")
     out.parent.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(
         ["ffmpeg", "-y", "-framerate", str(fps),
          "-i", str(frames_dir / "f%05d.png"),
-         "-c:v", "qtrle", "-pix_fmt", "argb", str(out)],
+         *EXPORT_FORMATS[export_format], str(out)],
         capture_output=True, text=True,
     )
     if proc.returncode != 0 or not out.exists():
         raise GraphicsError(f"encoding failed: {proc.stderr[-400:]}")
     return out
+
+
+def explode_to_png(clip: Path, out_dir: Path) -> Path:
+    """A rendered clip as a numbered PNG sequence. Returns the folder.
+
+    The answer for an editor that will not open any of the alpha codecs: PNG
+    has no codec to support. Every NLE collapses a numbered sequence back into
+    one clip, and on flat graphics the folder comes out about the size of the
+    qtrle file it came from — compression was never the reason to prefer a
+    single file.
+
+    Kept out of EXPORT_FORMATS on purpose: this returns a directory, and the
+    render pipeline downstream expects a file it can probe.
+    """
+    if not shutil.which("ffmpeg"):
+        raise GraphicsError("ffmpeg not found on PATH — cannot explode the clip.")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(
+        ["ffmpeg", "-y", "-i", str(clip), "-pix_fmt", "rgba",
+         str(out_dir / f"{clip.stem}_%04d.png")],
+        capture_output=True, text=True)
+    if proc.returncode != 0 or not any(out_dir.iterdir()):
+        raise GraphicsError(f"could not explode {clip.name}: {proc.stderr[-400:]}")
+    return out_dir
 
 
 def _hash_unit(n: int) -> float:
@@ -429,7 +481,7 @@ def _render(draw_frame, duration: float, style: Style, out: Path) -> Path:
                     shots.append(_compose_frame(draw_frame, t, style))
                 img = _average_rgba(shots)
             img.save(d / f"f{n:05d}.png")
-        return _encode(d, out, style.fps)
+        return _encode(d, out, style.fps, style.export_format)
 
 
 # ------------------------------------------------------------ generators ---
@@ -1207,6 +1259,11 @@ GENERATORS = {
     "bar_chart_h": bar_chart_h,
     "linked_meters": linked_meters,
 }
+
+
+def available_export_formats() -> list[str]:
+    """Alpha-carrying clip formats. A PNG sequence is offered separately."""
+    return list(EXPORT_FORMATS)
 
 
 def available_paces() -> list[str]:
