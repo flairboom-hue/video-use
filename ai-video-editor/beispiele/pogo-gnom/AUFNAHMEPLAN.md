@@ -144,6 +144,23 @@ Vollbild. Der Anker „Ladung" stammt aus der Grafikbeschreibung im Skript, nich
 aus einem gesprochenen Satz — kommt das Wort im Take nicht vor, meldet die
 Ankerauflösung das und die Grafik wird von Hand gesetzt.
 
+### Wie das aussieht
+
+`storyboard.py` zeichnet ein Bild pro Block — mit den **echten** Grafiken,
+denselben Rändern und derselben Untertitelzone wie im Video. Was noch fehlt
+(Spielaufnahme, Facecam), steht als Platzhalter drin und ist als solcher
+markiert.
+
+    python beispiele/pogo-gnom/storyboard.py storyboard
+
+Zwei Stellen fallen dabei auf und sind im Bild rot markiert: bei **0:08** und
+**10:20** will der Schnittplan Facecam und Zahlenkarte gleichzeitig. Die Karten
+sind Vollbreite-Platten und liegen mittig — also genau dort, wo der Kopf ist.
+An diesen zwei Stellen muss während der Karte auf Spielaufnahme geschnitten
+werden, oder die Karte wird von Hand kleiner gesetzt.
+
+---
+
 ### Die Gegenüberstellungen
 
 `vergleiche.py` baut die Vorher/Nachher-Wischblenden. Es sind Zustände und
