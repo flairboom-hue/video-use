@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Vorher/Nachher-Gegenüberstellungen für den POGO GNOM Devlog.
 
-Die sieben Fehler zwischen 2:45 und 5:00 sind der Kern des Videos, und ein
-Satz wie „die Berge schwebten" ist ohne Bild eine Behauptung. Für die fünf,
-die AUFNAHMEPLAN.md benennt, reichen je zwei Screenshots — es sind Zustände,
-keine Vorgänge, also braucht es kein Videomaterial.
+Die Fehler sind der Kern des Videos, und ein Satz wie „die Berge schwebten"
+ist ohne Bild eine Behauptung. Sechs davon sind Zustände und keine Vorgänge —
+je zwei Screenshots reichen, Videomaterial braucht es nicht.
 
     python beispiele/pogo-gnom/vergleiche.py [ziel-ordner]
 
@@ -31,22 +30,27 @@ ASSETS = Path(__file__).resolve().parents[2] / "ASSETS" / "broll"
 # Das Ankerwort ist das gesprochene Wort, auf dem die Gegenüberstellung liegen
 # soll — nicht ein Zeitpunkt. Schneidest du um, wandert sie mit.
 #
-# ACHTUNG: Die Ankerwörter hier sind aus der Fehlerbezeichnung abgeleitet, NICHT
-# aus dem gesprochenen Text — der existiert noch nicht. Nach der Aufnahme gegen
-# das Transkript prüfen; findet die Ankerauflösung das Wort nicht, meldet sie
-# das und die Gegenüberstellung wird von Hand gesetzt.
+# Die Ankerwörter stehen so im Skript (`YOUTUBE-SKRIPT.md`), sind also echter
+# gesprochener Text und nicht abgeleitet. Trotzdem nach der Aufnahme gegen das
+# Transkript prüfen: sagst du den Satz anders, findet die Ankerauflösung das
+# Wort nicht und meldet es.
 FEHLER = [
-    ("berge", "Berge", "schwebende Berge", "verankert"),
-    ("fluss", "Fluss", "Fluss verschwunden", "sichtbar"),
-    ("texturen", "Texturen", "zu hell", "abgestimmt"),
-    ("brett", "Geisterbrett", "Geisterbrett", "entfernt"),
-    ("pilzhut", "Pilzhut", "Pilzhut falsch", "korrigiert"),
+    # Fehler 2-5 und 7 aus dem Kapitel „Die Fehler" (2:45-5:00)
+    ("berge", "schwebten", "schwebend", "verankert"),
+    ("fluss", "verschwand", "Fluss weg", "Fluss da"),
+    ("texturen", "aufgehellt", "Stein weiß", "Stein grau"),
+    ("brett", "Holzbrett", "Geisterbrett", "entfernt"),
+    ("pilzhut", "Pilzhut", "halbiert", "frei"),
+    # Fehler 12 aus dem Steam-Kapitel (9:00). Das Skript nennt es die Pointe,
+    # und der Aufnahmeplan zählt es zu den zwei wertvollsten Aufnahmen.
+    # Richtung wie überall: links der Fehler, rechts die Behebung.
+    ("startgarten", "fehlt", "leer geräumt", "wieder da"),
 ]
 
-# AUFNAHMEPLAN.md spricht von sieben Fehlern, benennt aber nur diese fünf.
-# Die beiden anderen stehen bewusst nicht hier: erfundene Einträge wären
-# schlimmer als eine Lücke, die man sieht.
-UNBENANNT = 7 - len(FEHLER)
+# Fehler 1 (das tote englische Gartenamt) und Fehler 6 (69 kaputte Kameras)
+# sind die beiden restlichen aus dem Siebener-Kapitel. Beide bekommen KEINE
+# Gegenüberstellung: der eine ist eine Codezeile, der andere eine Zählung —
+# für beide sieht ein Vorher/Nachher-Bild gleich aus.
 
 
 def paths_for(key: str) -> tuple[Path, Path]:
@@ -91,8 +95,5 @@ if __name__ == "__main__":
               f"(nach {ASSETS} legen):")
         for line in fehlt:
             print(f"  {line}")
-    if UNBENANNT:
-        print(f"\nDazu {UNBENANNT} Fehler, die AUFNAHMEPLAN.md mitzählt, aber "
-              f"nicht benennt — Kürzel und Ankerwort oben eintragen.")
     if not gebaut and not fehlt:
         print("Nichts zu tun.")

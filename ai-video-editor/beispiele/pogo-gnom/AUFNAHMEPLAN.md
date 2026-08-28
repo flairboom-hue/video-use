@@ -146,33 +146,62 @@ Ankerauflösung das und die Grafik wird von Hand gesetzt.
 
 ### Die Gegenüberstellungen
 
-`vergleiche.py` baut die Vorher/Nachher-Wischblenden für die Fehler zwischen
-2:45 und 5:00. Die fünf, die dieser Plan benennt, sind Zustände und keine
-Vorgänge — je zwei Screenshots reichen, Videomaterial braucht es nicht:
+`vergleiche.py` baut die Vorher/Nachher-Wischblenden. Es sind Zustände und
+keine Vorgänge — je zwei Screenshots reichen, Videomaterial braucht es nicht:
 
-| Kürzel | Dateien in `ASSETS/broll/` |
-|---|---|
-| `berge` | `berge_vorher.png`, `berge_nachher.png` |
-| `fluss` | `fluss_vorher.png`, `fluss_nachher.png` |
-| `texturen` | `texturen_vorher.png`, `texturen_nachher.png` |
-| `brett` | `brett_vorher.png`, `brett_nachher.png` |
-| `pilzhut` | `pilzhut_vorher.png`, `pilzhut_nachher.png` |
+| Kürzel | Skript | Anker | Dateien in `ASSETS/broll/` |
+|---|---|---|---|
+| `berge` | Fehler 2 | „schwebten" | `berge_vorher.png`, `berge_nachher.png` |
+| `fluss` | Fehler 3 | „verschwand" | `fluss_vorher.png`, `fluss_nachher.png` |
+| `texturen` | Fehler 4 | „aufgehellt" | `texturen_vorher.png`, `texturen_nachher.png` |
+| `brett` | Fehler 5 | „Holzbrett" | `brett_vorher.png`, `brett_nachher.png` |
+| `pilzhut` | Fehler 7 | „Pilzhut" | `pilzhut_vorher.png`, `pilzhut_nachher.png` |
+| `startgarten` | Fehler 12 | „fehlt" | `startgarten_vorher.png`, `startgarten_nachher.png` |
 
     python beispiele/pogo-gnom/vergleiche.py vergleiche
 
-Das Skript baut, was da ist, und listet auf, was fehlt. Die Ankerwörter darin
-sind aus den Fehlerbezeichnungen abgeleitet, nicht aus gesprochenem Text — nach
-der Aufnahme gegen das Transkript prüfen.
+Das Skript baut, was da ist, und listet auf, was fehlt. Die Ankerwörter stehen
+so im gesprochenen Text — trotzdem nach der Aufnahme gegen das Transkript
+prüfen, falls du den Satz anders formulierst.
 
-Zwei der sieben Fehler benennt dieser Plan nicht. Die stehen bewusst auch nicht
-im Skript: eine sichtbare Lücke ist besser als ein erfundener Eintrag.
+**Zwei der sieben Fehler bekommen keine Gegenüberstellung.** Fehler 1 (das tote
+englische Gartenamt) ist eine Codezeile, Fehler 6 (69 kaputte Kameras) eine
+Zählung. Für beide sähe ein Vorher/Nachher-Bild gleich aus; das Skript sieht
+dort ohnehin eine Grafik statt eines Vergleichs vor.
+
+Bei `startgarten` steht links der **leere** Garten. Der Fehler kommt zuerst,
+die Behebung danach — wie bei allen anderen auch. Das Skript nennt die
+Reihenfolge andersherum („voll · leer"), meint damit aber die Erzählung, nicht
+die Blende.
 
 ---
 
 ## Vor der Aufnahme klären
 
-Drei Widersprüche zwischen den Projektdokumenten. Zahlen im Video werden
-nachgerechnet.
+### Zuerst: der Satz bei 0:08, der so nicht mehr stimmt
+
+Im Block **0:08–0:45** steht als gesprochener Text:
+
+> „Was dabei aber **nicht** passiert ist: kein einziges generiertes Bild,
+> **keine generierte Musik**, keine Stimmen."
+
+Der Vorspann desselben Dokuments sagt über genau diesen Satz:
+
+> „Die erste Fassung dieses Skripts behauptete noch ‚keine KI-Musik'. […]
+> **Wenn du den alten Satz sagst, ist das die Lüge, an der sich alles andere
+> aufhängt.**"
+
+Der Vorspann wurde aktualisiert, der Sprechtext bei 0:08 nicht. **Sprich diesen
+Satz nicht so.** Der Ersatz steht schon im Vorspann formuliert („Eine Sache
+noch: Die Musik ist generiert, mit Suno …") — er hat nur keine Zeitmarke. Er
+gehört unmittelbar hinter den KI-Block bei 0:08, bevor Kapitel 0:45 anfängt.
+
+Das ist die einzige Stelle im ganzen Plan, bei der eine Aufnahme ohne Korrektur
+unbrauchbar wäre statt nur unsauber.
+
+### Drei Zahlen, die sich widersprechen
+
+Zahlen im Video werden nachgerechnet.
 
 1. **Draw Calls:** Skript sagt `991 → 884 → 730`, `UEBERGABE-YOUTUBE.md` sagt
    `968 → 730`. Die gerenderte Grafik nutzt die Skript-Fassung.
@@ -181,9 +210,17 @@ nachgerechnet.
 3. **Neun Fehler in zwei …?** `UEBERGABE-YOUTUBE.md` sagt „Stunden",
    `ECKDATEN.md` und das Skript sagen „Tage". ECKDATEN ist neuer.
 
-Dazu eine Zählung, die stolpert: Die Kapitelkarte bei 0:45 sagt „7 Fehler",
-danach zählt das Skript bis Fehler 12 und spricht von neun Steam-Fehlern.
-Wer mitzählt, kommt nicht auf.
+### Zwei Kleinigkeiten
+
+Die Kapitelkarte bei 0:45 sagt „7 Fehler", danach zählt das Skript bis Fehler 12
+und spricht von neun Steam-Fehlern. Wer mitzählt, kommt nicht auf. Das ist im
+Video wahrscheinlich egal — sichtbar wird es nur, wenn du die Nummern laut
+mitsprichst.
+
+Im Landefenster-Diagramm des Skripts steht `GARTENWEG 29 %` über `WOLKEN 31 %`.
+In einem Diagramm, dessen Aussage „die Kurve fällt gleichmäßig" ist, fällt eine
+vertauschte Zeile auf. Die gerenderte Grafik sortiert absteigend und hat das
+still korrigiert.
 
 ---
 

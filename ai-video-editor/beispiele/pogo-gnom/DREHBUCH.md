@@ -155,16 +155,16 @@ Nicht der technisch sauberste gewinnt.
 | Zeit | Block | Bild | Was dazu liegt | Ton |
 |---|---|---|---|---|
 | 0:00 | Hook | **A** + Sturz, Bescheid mit Stempel | — | Kein Anlauf. Erster Satz ist der erste Satz. |
-| 0:08 | Prämisse | **B** | Zahlenkarte, Balken geschrieben/gelöscht | Nüchtern. Die Zahlen tragen sich selbst. |
+| 0:08 | Prämisse + KI-Frage | **B** | Zahlenkarte, Balken geschrieben/gelöscht | Nüchtern. Die Zahlen tragen sich selbst. **Achtung:** der Satz „keine generierte Musik" darf so nicht fallen — siehe `AUFNAHMEPLAN.md`. |
 | 0:45 | Kapitel „7 Fehler" | **B** | Kapitelkarte | Kurz, als Übergang. |
 | 0:50 | Was das Spiel ist | **B** — Aufstieg durch Zonen | — | Erklärend, verzeiht am meisten. |
 | 1:20 | Drei Bescheide | **B** | — | Rhythmisch, die drei kommen nacheinander. |
 | 1:45 | Pogo-Physik | **B** — Sprungaufnahme | Regler „Ladung", zwei Balken | Ruhig. Die Grafik erklärt, du benennst nur. |
 | 2:30 | Landefenster | **B** — Vollbild | Waagerechtes Balkendiagramm, elf Zonen | Lass der Grafik Zeit, elf Zeilen liest niemand nebenbei. |
-| 2:45–5:00 | **Die sieben Fehler** | **B** | Fünf Vorher/Nachher-Wischblenden | Herzstück. Pro Fehler: was war, was ich dachte, was es war. |
+| 2:45–5:00 | **Die sieben Fehler** | **B** | Fünf Vorher/Nachher-Wischblenden, zwei Grafiken | Herzstück. Pro Fehler: was war, was ich dachte, was es war. |
 | 5:15 | Was gut geworden ist | **B** — Figuren, Truhe, Garderobe | Zahlenkarte 2, Draw Calls, verschmolzen | Hörbar anderer Ton als davor — hier darf Freude rein. |
 | 7:30 | **Das Geständnis** | **A** | — | Kein Schnitt. Siehe oben. |
-| 9:00 | Steam-Kapitel | **B** — Terminal, Achievements, Startgarten | Kapitelkarte, neun Fehler, 44 % | Trocken. Die Fehler sind komisch genug ohne Hilfe. |
+| 9:00 | Steam-Kapitel | **B** — Terminal, Achievements, Startgarten | Kapitelkarte, neun Fehler, 44 %, Wischblende Startgarten | Trocken. Die Fehler sind komisch genug ohne Hilfe. |
 | 10:20 | Bilanz | **B** | Zahlenkarte 3 | Zurückblickend, nicht triumphierend. |
 | 10:20–11:00 | Abschluss | **A** | — | Kurz. Nicht um einen Appell herum bauen. |
 
