@@ -2,8 +2,12 @@
 """Vorher/Nachher-Gegenüberstellungen für den POGO GNOM Devlog.
 
 Die Fehler sind der Kern des Videos, und ein Satz wie „die Berge schwebten"
-ist ohne Bild eine Behauptung. Sechs davon sind Zustände und keine Vorgänge —
+ist ohne Bild eine Behauptung. Alle acht sind Zustände und keine Vorgänge —
 je zwei Screenshots reichen, Videomaterial braucht es nicht.
+
+Was in beiden Bildern gleich sein muss: Kamerastandort, Blickwinkel,
+Tageszeit und Auflösung. Wandert die Kamera zwischen den beiden Aufnahmen,
+liest sich die Wischblende als Kamerafahrt statt als Veränderung.
 
     python beispiele/pogo-gnom/vergleiche.py [ziel-ordner]
 
@@ -35,23 +39,22 @@ ASSETS = Path(__file__).resolve().parents[2] / "ASSETS" / "broll"
 # Transkript prüfen: sagst du den Satz anders, findet die Ankerauflösung das
 # Wort nicht und meldet es.
 FEHLER = [
-    # Fehler 2-5 und 7 aus dem Kapitel „Die Fehler" (2:45-5:00)
+    # Die sieben aus dem Kapitel „Die Fehler" (2:45–5:00), in Skript-Reihenfolge
+    ("gartenamt", "englische", "Bescheid auf Deutsch", "auf Englisch"),
     ("berge", "schwebten", "schwebend", "verankert"),
     ("fluss", "verschwand", "Fluss weg", "Fluss da"),
     ("texturen", "aufgehellt", "Stein weiß", "Stein grau"),
     ("brett", "Holzbrett", "Geisterbrett", "entfernt"),
+    ("kameras", "geschätzt", "Kamera in Plattform", "frei"),
     ("pilzhut", "Pilzhut", "halbiert", "frei"),
     # Fehler 12 aus dem Steam-Kapitel (9:00). Das Skript nennt es die Pointe,
     # und der Aufnahmeplan zählt es zu den zwei wertvollsten Aufnahmen.
-    # Richtung wie überall: links der Fehler, rechts die Behebung.
     ("startgarten", "fehlt", "leer geräumt", "wieder da"),
 ]
 
-# Fehler 1 (das tote englische Gartenamt) und Fehler 6 (69 kaputte Kameras)
-# sind die beiden restlichen aus dem Siebener-Kapitel. Beide bekommen KEINE
-# Gegenüberstellung: der eine ist eine Codezeile, der andere eine Zählung —
-# für beide sieht ein Vorher/Nachher-Bild gleich aus.
-
+# Richtung überall gleich: links der Fehler, rechts die Behebung. Auch bei
+# `startgarten`, wo das Skript die Reihenfolge andersherum nennt — das ist
+# die Erzählung, nicht die Blende.
 
 def paths_for(key: str) -> tuple[Path, Path]:
     return ASSETS / f"{key}_vorher.png", ASSETS / f"{key}_nachher.png"

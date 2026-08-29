@@ -164,33 +164,32 @@ Bildern.
 
 ### Die Gegenüberstellungen
 
-`vergleiche.py` baut die Vorher/Nachher-Wischblenden. Es sind Zustände und
-keine Vorgänge — je zwei Screenshots reichen, Videomaterial braucht es nicht:
+`vergleiche.py` baut die Vorher/Nachher-Wischblenden — **acht Paare**: die
+sieben Fehler aus 2:45–5:00 und der leergeräumte Startgarten aus dem
+Steam-Kapitel. Alle acht sind Zustände und keine Vorgänge, je zwei Screenshots
+reichen.
 
-| Kürzel | Skript | Anker | Dateien in `ASSETS/broll/` |
-|---|---|---|---|
-| `berge` | Fehler 2 | „schwebten" | `berge_vorher.png`, `berge_nachher.png` |
-| `fluss` | Fehler 3 | „verschwand" | `fluss_vorher.png`, `fluss_nachher.png` |
-| `texturen` | Fehler 4 | „aufgehellt" | `texturen_vorher.png`, `texturen_nachher.png` |
-| `brett` | Fehler 5 | „Holzbrett" | `brett_vorher.png`, `brett_nachher.png` |
-| `pilzhut` | Fehler 7 | „Pilzhut" | `pilzhut_vorher.png`, `pilzhut_nachher.png` |
-| `startgarten` | Fehler 12 | „fehlt" | `startgarten_vorher.png`, `startgarten_nachher.png` |
+| Kürzel | Skript | Anker |
+|---|---|---|
+| `gartenamt` | Fehler 1 | „englische" |
+| `berge` | Fehler 2 | „schwebten" |
+| `fluss` | Fehler 3 | „verschwand" |
+| `texturen` | Fehler 4 | „aufgehellt" |
+| `brett` | Fehler 5 | „Holzbrett" |
+| `kameras` | Fehler 6 | „geschätzt" |
+| `pilzhut` | Fehler 7 | „Pilzhut" |
+| `startgarten` | Fehler 12 | „fehlt" |
+
+**Was genau auf jedem der sechzehn Bilder zu sehen sein muss, steht in
+`SCREENSHOTS.md`.** Dort auch die drei Regeln, ohne die eine Wischblende nicht
+funktioniert — allen voran: gleicher Kamerastandort in beiden Bildern, sonst
+liest sich die Blende als Kamerafahrt statt als Veränderung.
 
     python beispiele/pogo-gnom/vergleiche.py vergleiche
 
-Das Skript baut, was da ist, und listet auf, was fehlt. Die Ankerwörter stehen
-so im gesprochenen Text — trotzdem nach der Aufnahme gegen das Transkript
-prüfen, falls du den Satz anders formulierst.
-
-**Zwei der sieben Fehler bekommen keine Gegenüberstellung.** Fehler 1 (das tote
-englische Gartenamt) ist eine Codezeile, Fehler 6 (69 kaputte Kameras) eine
-Zählung. Für beide sähe ein Vorher/Nachher-Bild gleich aus; das Skript sieht
-dort ohnehin eine Grafik statt eines Vergleichs vor.
-
-Bei `startgarten` steht links der **leere** Garten. Der Fehler kommt zuerst,
-die Behebung danach — wie bei allen anderen auch. Das Skript nennt die
-Reihenfolge andersherum („voll · leer"), meint damit aber die Erzählung, nicht
-die Blende.
+Das Skript baut, was da ist, und listet auf, was fehlt — du kannst also Stück
+für Stück liefern. Die Ankerwörter stehen so im gesprochenen Text; trotzdem
+nach der Aufnahme gegen das Transkript prüfen.
 
 ---
 
