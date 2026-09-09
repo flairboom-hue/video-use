@@ -146,9 +146,17 @@ def detect() -> Capabilities:
         "scenedetect": _module(
             "scenedetect", "scenedetect",
             "Scene detection. pip install scenedetect[opencv]"),
+        # Two transcribers, either of which is enough. WhisperX aligns word
+        # times against a phoneme model and can separate speakers; faster-
+        # whisper needs no torch and installs in seconds. The pipeline takes
+        # whichever is there, so both being optional is the honest shape.
         "whisperx": _module(
             "whisperx", "whisperx",
-            "Local transcription. pip install whisperx (large; pulls in torch)"),
+            "Local transcription, tighter word times. pip install whisperx "
+            "(large; pulls in torch)"),
+        "faster-whisper": _module(
+            "faster-whisper", "faster_whisper",
+            "Local transcription without torch. pip install faster-whisper"),
         "ollama": _binary(
             "ollama", ["--version"],
             "Local LLM for the chat and creative suggestions. https://ollama.com"),
@@ -167,7 +175,13 @@ def quality_profile() -> dict:
     if hw.cuda and hw.vram_gb >= 5:
         return {"whisper_model": "medium", "device": "cuda", "compute_type": "float16",
                 "batch_size": 8, "encoder": "h264_nvenc", "proxy_height": 540}
-    if hw.ram_gb >= 16:
+    # 15, not 16: a nominal 16 GB machine reports 15.5-15.8 once firmware has
+    # taken its share, so a threshold at 16 excludes every machine that is
+    # actually a 16 GB machine. Measured here at 15.7 GB, which fell to `base`
+    # — and `base` gets German compounds wrong ("Zahlen" for "Zeilen",
+    # "26 .000" split across two tokens), which lands in a burned-in caption.
+    # small costs 3.4x realtime against base's 6.8x on four CPU cores.
+    if hw.ram_gb >= 15:
         return {"whisper_model": "small", "device": "cpu", "compute_type": "int8",
                 "batch_size": 4, "encoder": "libx264", "proxy_height": 540}
     return {"whisper_model": "base", "device": "cpu", "compute_type": "int8",

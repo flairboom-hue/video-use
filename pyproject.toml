@@ -17,6 +17,7 @@ animations = ["manim"]
 autocut = ["auto-editor"]
 otio = ["OpenTimelineIO-Plugins"]
 whisperx = ["whisperx"]
+fasterwhisper = ["faster-whisper"]
 dev = ["pytest>=7.0"]
 
 [build-system]

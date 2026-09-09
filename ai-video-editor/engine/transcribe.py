@@ -98,23 +98,7 @@ def transcribe(video: Path, out_path: Path, model: str = "large-v3",
     if out_path.exists() and not force:
         return load(out_path)
 
-    try:
-        import transcribe_whisperx as tw  # from helpers/
-    except ImportError as exc:
-        raise TranscriptionUnavailable(
-            "The WhisperX helper could not be imported. Expected it at "
-            f"{HELPERS / 'transcribe_whisperx.py'}"
-        ) from exc
-
-    try:
-        import whisperx  # noqa: F401
-    except ImportError as exc:
-        raise TranscriptionUnavailable(
-            "WhisperX is not installed, so no transcript can be produced.\n"
-            "Fix: pip install whisperx  (large download; a CUDA GPU makes it "
-            "roughly an order of magnitude faster, but CPU works)"
-        ) from exc
-
+    tw = _pick_backend()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tw.transcribe_one(
         video=Path(video),
@@ -124,6 +108,41 @@ def transcribe(video: Path, out_path: Path, model: str = "large-v3",
         diarize=diarize, force=force, verbose=True,
     )
     return load(out_path)
+
+
+def _pick_backend():
+    """WhisperX if it is there, faster-whisper otherwise.
+
+    WhisperX first because its forced alignment gives tighter word boundaries
+    and it can separate speakers. faster-whisper is not a degraded mode though
+    — it produces the same Scribe format and needs no torch, which is why it
+    is worth having as more than a fallback.
+
+    Both missing is reported once, with both ways out, because "install
+    WhisperX" alone sends people into a multi-gigabyte download they may not
+    need.
+    """
+    for module, probe in (("transcribe_whisperx", "whisperx"),
+                          ("transcribe_fasterwhisper", "faster_whisper")):
+        try:
+            __import__(probe)
+        except ImportError:
+            continue
+        try:
+            return __import__(module)
+        except ImportError as exc:
+            raise TranscriptionUnavailable(
+                f"{probe} is installed but its helper could not be imported. "
+                f"Expected it at {HELPERS / (module + '.py')}") from exc
+
+    raise TranscriptionUnavailable(
+        "No transcriber is installed, so no transcript can be produced — "
+        "filler and repetition removal, captions and word anchoring are all "
+        "off without one.\n"
+        "Fix (pick one):\n"
+        "  pip install faster-whisper   small, no torch, seconds to install\n"
+        "  pip install whisperx         tighter word times, speaker separation,"
+        " large download")
 
 
 def write_srt(transcript: Transcript, path: Path, max_words: int = 2) -> Path:

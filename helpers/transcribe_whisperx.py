@@ -99,8 +99,15 @@ def normalize_speaker(raw: str | None) -> str | None:
     return text
 
 
-def whisperx_to_scribe(result: dict, language: str | None = None) -> dict:
-    """WhisperX segments-of-words → the flat Scribe `words` list.
+def whisperx_to_scribe(result: dict, language: str | None = None,
+                       engine: str = "whisperx") -> dict:
+    """Segments-of-words → the flat Scribe `words` list.
+
+    Shared by both ASR backends. WhisperX and faster-whisper disagree about
+    almost everything except this shape, so the conversion lives once here and
+    each backend adapts its own output to `{"segments": [{"words": [...]}]}`
+    before calling it. Two converters would drift, and the drift would show up
+    as captions that are fine from one engine and off by a word from the other.
 
     Two details carry real weight:
 
@@ -155,7 +162,7 @@ def whisperx_to_scribe(result: dict, language: str | None = None) -> dict:
             prev_end = end
 
     return {
-        "_engine": "whisperx",
+        "_engine": engine,
         "language_code": language or result.get("language"),
         "text": " ".join(text_parts),
         "words": words,

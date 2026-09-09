@@ -8,4 +8,5 @@ scenedetect[opencv]>=0.6     # scene detection
 # Optional, installed on demand. Each one degrades to a reported
 # "unavailable" stage rather than breaking the pipeline.
 #   pip install auto-editor          silence detection
-#   pip install whisperx             local transcription (large; pulls in torch)
+#   pip install faster-whisper       local transcription, no torch, seconds
+#   pip install whisperx             tighter word times + speaker separation
